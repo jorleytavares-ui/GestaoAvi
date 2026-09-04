@@ -27,7 +27,9 @@ import { assumirLote, liberarLote, podeAssumirLote } from '../services/lotes';
 
 type Props = NativeStackScreenProps<import('../navigation/types').RootStackParamList, 'DetalheLote'>;
 
-const ABAS = [
+type AbaComp = React.ComponentType<any>;
+
+const ABAS: { key: string; label: string; Comp: AbaComp }[] = [
   { key: 'Resumo', label: 'Resumo', Comp: ResumoTab },
   { key: 'Mortalidade', label: 'Mortalidade', Comp: MortalidadeTab },
   { key: 'Agua', label: 'Água', Comp: AguaTab },
@@ -99,7 +101,13 @@ export function DetalheLoteScreen({ route, navigation }: Props) {
   const { lote, idx, idade, recarregar } = useIndicadoresLote(loteId);
   const [abaAtiva, setAbaAtiva] = useState<string>('Resumo');
 
-  const totalAlojado = lote?.galpoes.reduce((s, g) => s + (g.quantidadeAlojada || 0), 0) ?? 0;
+  const totalAlojado = lote?.galpoes.reduce(
+  (s, g) => s + (Number(g.quantidadeAlojada) || 0),
+  0
+) ?? 0;
+
+  
+
   const AbaAtivaComp = ABAS.find(a => a.key === abaAtiva)?.Comp ?? ResumoTab;
 
   return (
@@ -383,7 +391,9 @@ const styles = StyleSheet.create({
     color: COLORS.primary,
   },
   abaContent: {
-    minHeight: 400,
-    paddingBottom: 8,
-  },
+  minHeight: 400,
+  paddingHorizontal: 16,
+  paddingBottom: 8,
+},
+
 });

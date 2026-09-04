@@ -59,15 +59,23 @@ export function PesagensTab({ route }: Props) {
       }`,
     }));
 
-  return (
-    <View>
-      <PesagemPadraoCard
-        lote={lote}
-        padraoSexagem={padraoSexagem}
-        onSalvarPadraoSexagem={salvarPadraoSexagem}
-      />
-      <PesagemAmostraCard lote={lote} onSalvo={carregar} />
-      <HistoricoLista itens={itens} galpoes={lote.galpoes} onExcluir={handleExcluir} />
-    </View>
-  );
+return (
+  <View>
+    <PesagemPadraoCard
+      lote={lote}
+      padraoSexagem={padraoSexagem}
+      onSalvarPadraoSexagem={salvarPadraoSexagem}
+    />
+
+    <PesagemAmostraCard
+      lote={lote}
+      onSalvo={carregar}
+      itens={itens}
+      galpoes={lote.galpoes}
+      onExcluirItem={handleExcluir}
+    />
+  </View>
+);
+
+
 }

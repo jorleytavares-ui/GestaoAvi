@@ -8,11 +8,15 @@ import { GalpaoSelector } from './GalpaoSelector';
 import { DateField } from '../DateField';
 import { NumericFieldInline } from './NumericFieldInline';
 import { SalvarButton } from './SalvarButton';
+import { HistoricoLista } from './HistoricoLista';
 import { useAuth } from '../../auth/AuthContext';
 
 interface Props {
   lote: Lote;
   onSalvo: () => void;
+  itens: any[];
+  galpoes: any[];
+  onExcluirItem: (item: any) => void;
 }
 
 interface LinhaPesagem {
@@ -24,7 +28,7 @@ interface LinhaPesagem {
 
 const novaLinha = (): LinhaPesagem => ({ id: uid(), qtdAves: '', pesoRegistradoKg: '', descontosKg: '' });
 
-export function PesagemAmostraCard({ lote, onSalvo }: Props) {
+export function PesagemAmostraCard({ lote, onSalvo, itens, galpoes, onExcluirItem }: Props) {
   const { userId } = useAuth();
   const [galpaoId, setGalpaoId] = useState(lote.galpoes[0]?.id || '');
   const [data, setData] = useState(todayStr());
@@ -143,6 +147,8 @@ export function PesagemAmostraCard({ lote, onSalvo }: Props) {
       </View>
 
       <SalvarButton onPress={handleSalvar} loading={loading} />
+
+      <HistoricoLista itens={itens} galpoes={galpoes} onExcluir={onExcluirItem} />
     </View>
   );
 }

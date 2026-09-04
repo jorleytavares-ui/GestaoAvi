@@ -123,110 +123,111 @@ export function AguaTab({ route }: any) {
   });
 
   return (
-    <View>
-      <View
-        style={{
-          backgroundColor: COLORS.surface,
-          borderWidth: 1,
-          borderColor: COLORS.line,
-          borderRadius: 14,
-          padding: 14,
-          gap: 4,
+  <View>
+    <View
+      style={{
+        backgroundColor: COLORS.surface,
+        borderWidth: 1,
+        borderColor: COLORS.line,
+        borderRadius: 14,
+        padding: 14,
+        gap: 4,
+      }}
+    >
+      <Text style={{ fontSize: 14, fontWeight: '700', color: COLORS.ink }}>
+        Avaliação do consumo de água
+      </Text>
+      <Text style={{ fontSize: 12, color: COLORS.inkSoft, marginBottom: 8 }}>
+        A leitura deve ser feita diariamente, sempre no mesmo horário. O app calcula o consumo
+        do dia automaticamente pela diferença entre a leitura de hoje e a anterior.
+      </Text>
+
+      <DateField
+        mode="time"
+        label="Horário da leitura"
+        optional
+        value={
+          horaLeitura
+            ? (() => {
+                const [hh, mm] = horaLeitura.split(':').map(Number);
+                const d = new Date();
+                d.setHours(hh, mm, 0, 0);
+                return d;
+              })()
+            : null
+        }
+        onChange={(d) => {
+          const hh = String(d.getHours()).padStart(2, '0');
+          const mm = String(d.getMinutes()).padStart(2, '0');
+          handleHora(`${hh}:${mm}`);
         }}
-      >
-        <Text style={{ fontSize: 14, fontWeight: '700', color: COLORS.ink }}>
-          Avaliação do consumo de água
-        </Text>
-        <Text style={{ fontSize: 12, color: COLORS.inkSoft, marginBottom: 8 }}>
-          A leitura deve ser feita diariamente, sempre no mesmo horário. O app calcula o consumo
-          do dia automaticamente pela diferença entre a leitura de hoje e a anterior.
-        </Text>
+      />
 
-        <DateField
-          mode="time"
-          label="Horário da leitura"
-          optional
-          value={
-            horaLeitura
-              ? (() => {
-                  const [hh, mm] = horaLeitura.split(':').map(Number);
-                  const d = new Date();
-                  d.setHours(hh, mm, 0, 0);
-                  return d;
-                })()
-              : null
-          }
-          onChange={(d) => {
-            const hh = String(d.getHours()).padStart(2, '0');
-            const mm = String(d.getMinutes()).padStart(2, '0');
-            handleHora(`${hh}:${mm}`);
-          }}
-        />
+      <DateField
+        mode="date"
+        label="Data"
+        value={data ? new Date(data + 'T00:00:00') : null}
+        onChange={(d) => {
+          const yyyy = d.getFullYear();
+          const mm = String(d.getMonth() + 1).padStart(2, '0');
+          const dd = String(d.getDate()).padStart(2, '0');
+          setData(`${yyyy}-${mm}-${dd}`);
+        }}
+        minimumDate={new Date(dataMenosDias(lote.dataAlojamento, 15) + 'T00:00:00')}
+        maximumDate={new Date(todayStr() + 'T00:00:00')}
+      />
 
-        <DateField
-          mode="date"
-          label="Data"
-          value={data ? new Date(data + 'T00:00:00') : null}
-          onChange={(d) => {
-            const yyyy = d.getFullYear();
-            const mm = String(d.getMonth() + 1).padStart(2, '0');
-            const dd = String(d.getDate()).padStart(2, '0');
-            setData(`${yyyy}-${mm}-${dd}`);
-          }}
-          minimumDate={new Date(dataMenosDias(lote.dataAlojamento, 15) + 'T00:00:00')}
-          maximumDate={new Date(todayStr() + 'T00:00:00')}
-        />
+      <GalpaoSelector
+        galpoes={lote.galpoes}
+        selecionadoId={galpaoId}
+        onSelect={setGalpaoId}
+      />
 
-        <GalpaoSelector
-          galpoes={lote.galpoes}
-          selecionadoId={galpaoId}
-          onSelect={setGalpaoId}
-        />
+      <NumericFieldInline
+        label="Leitura do hidrômetro"
+        unit="m³"
+        value={leitura}
+        onChangeText={setLeitura}
+      />
 
-        <NumericFieldInline
-          label="Leitura do hidrômetro"
-          unit="m³"
-          value={leitura}
-          onChangeText={setLeitura}
-        />
-
-        <View style={{ flexDirection: 'row', gap: 12 }}>
-          <NumericFieldInline label="Ppm — opcional" value={ppm} onChangeText={setPpm} />
-          <NumericFieldInline label="pH — opcional" value={ph} onChangeText={setPh} />
-        </View>
-
-        <View
-          style={{
-            flexDirection: 'row',
-            justifyContent: 'space-between',
-            paddingVertical: 6,
-            borderBottomWidth: 1,
-            borderBottomColor: COLORS.line,
-            marginBottom: 8,
-          }}
-        >
-          <Text style={{ fontSize: 13, color: COLORS.inkSoft }}>Consumo do dia</Text>
-          <Text style={{ fontSize: 13, fontWeight: '600', color: COLORS.ink }}>
-            {consumoCalculadoM3 !== null
-              ? `${fmt(consumoCalculadoM3, 3)} m³ (${fmt(consumoCalculadoM3 * 1000, 0)} L)`
-              : anterior
-              ? '—'
-              : 'primeira leitura (base)'}
-          </Text>
-        </View>
-
-        {!!erro && (
-          <Text style={{ color: COLORS.danger ?? '#c0392b', fontSize: 13.5, marginBottom: 8 }}>
-            {erro}
-          </Text>
-        )}
-
-        <SalvarButton onPress={salvar} loading={salvando} label="Adicionar leitura" />
+      <View style={{ flexDirection: 'row', gap: 12 }}>
+        <NumericFieldInline label="Ppm — opcional" value={ppm} onChangeText={setPpm} />
+        <NumericFieldInline label="pH — opcional" value={ph} onChangeText={setPh} />
       </View>
 
-      <View style={{ height: 16 }} />
+      <View
+        style={{
+          flexDirection: 'row',
+          justifyContent: 'space-between',
+          paddingVertical: 6,
+          borderBottomWidth: 1,
+          borderBottomColor: COLORS.line,
+          marginBottom: 8,
+        }}
+      >
+        <Text style={{ fontSize: 13, color: COLORS.inkSoft }}>Consumo do dia</Text>
+        <Text style={{ fontSize: 13, fontWeight: '600', color: COLORS.ink }}>
+          {consumoCalculadoM3 !== null
+            ? `${fmt(consumoCalculadoM3, 3)} m³ (${fmt(consumoCalculadoM3 * 1000, 0)} L)`
+            : anterior
+            ? '—'
+            : 'primeira leitura (base)'}
+        </Text>
+      </View>
 
+      {!!erro && (
+        <Text style={{ color: COLORS.danger ?? '#c0392b', fontSize: 13.5, marginBottom: 8 }}>
+          {erro}
+        </Text>
+      )}
+
+      {/* Botão no meio do card, separando formulário do histórico */}
+      <SalvarButton onPress={salvar} loading={salvando} label="Adicionar leitura" />
+
+      {/* Histórico dentro do mesmo card */}
       <HistoricoLista itens={itensHistorico} galpoes={lote.galpoes} onExcluir={handleExcluir} />
     </View>
-  );
+  </View>
+);
+
 }

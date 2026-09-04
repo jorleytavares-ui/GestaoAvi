@@ -161,8 +161,9 @@ export function MortalidadeTab({ route }: Props) {
 const opcoesGalpao = lote.galpoes.map((g: any) => ({ label: g.nome, value: g.id }));
 
 
-  return (
-    <View>
+return (
+  <View>
+    <View style={styles.card}>
       <Text style={styles.titulo}>Mortalidade e descarte</Text>
 
       {lote.galpoes.length > 1 && (
@@ -232,6 +233,7 @@ const opcoesGalpao = lote.galpoes.map((g: any) => ({ label: g.nome, value: g.id 
         />
       </View>
 
+      {/* Botão no meio do card, separando formulário do histórico */}
       <Pressable
         style={[styles.button, salvando && styles.buttonDisabled]}
         onPress={handleSalvar}
@@ -240,10 +242,11 @@ const opcoesGalpao = lote.galpoes.map((g: any) => ({ label: g.nome, value: g.id 
         {salvando ? (
           <ActivityIndicator color="#fff" />
         ) : (
-          <Text style={styles.buttonText}>Salvar lançamento</Text>
+          <Text style={styles.buttonText}>✓ Salvar</Text>
         )}
       </Pressable>
 
+      {/* Histórico dentro do mesmo card */}
       <Text style={styles.subtitulo}>Histórico</Text>
       <HistoricoLista
         itens={itens}
@@ -251,7 +254,11 @@ const opcoesGalpao = lote.galpoes.map((g: any) => ({ label: g.nome, value: g.id 
         onExcluir={handleExcluir}
       />
     </View>
-  );
+  </View>
+);
+
+
+
 }
 
 const styles = StyleSheet.create({
@@ -267,12 +274,13 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   subtitulo: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: COLORS.ink,
-    marginTop: 24,
-    marginBottom: 12,
-  },
+  fontSize: 16,
+  fontWeight: '700',
+  color: COLORS.ink,
+  marginTop: 20,
+  marginBottom: 12,
+},
+
   campo: {
     marginBottom: 16,
   },
@@ -319,4 +327,14 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     fontSize: 14,
   },
+  card: {
+  backgroundColor: COLORS.surface,
+  borderWidth: 1,
+  borderColor: COLORS.line,
+  borderRadius: 14,
+  padding: 14,
+  marginBottom: 16,
+  gap: 12,
+},
+
 });
