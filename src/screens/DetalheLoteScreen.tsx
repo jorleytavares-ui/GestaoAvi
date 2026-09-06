@@ -100,6 +100,7 @@ export function DetalheLoteScreen({ route, navigation }: Props) {
   const { user } = useAuth();
   const { lote, idx, idade, recarregar } = useIndicadoresLote(loteId);
   const [abaAtiva, setAbaAtiva] = useState<string>('Resumo');
+  const [liberandoOtimista, setLiberandoOtimista] = useState(false);
 
   const totalAlojado = lote?.galpoes.reduce(
   (s, g) => s + (Number(g.quantidadeAlojada) || 0),
@@ -109,6 +110,7 @@ export function DetalheLoteScreen({ route, navigation }: Props) {
   
 
   const AbaAtivaComp = ABAS.find(a => a.key === abaAtiva)?.Comp ?? ResumoTab;
+  const loteLiberado = liberandoOtimista || !!lote?.liberado;
 
   return (
     <View style={styles.root}>
@@ -142,11 +144,18 @@ export function DetalheLoteScreen({ route, navigation }: Props) {
             </Text>
 
             <Text style={styles.responsavel}>
-              Resp:{' '}
-              <Text style={styles.responsavelValor}>
-                {lote.liberado || !lote.ownerId ? 'Lote livre' : lote.ownerNome || 'Usuário não identificado'}
-              </Text>
-            </Text>
+  {loteLiberado || !lote.ownerId ? (
+    'Lote livre'
+  ) : (
+    <>
+      Resp:{' '}
+      <Text style={styles.responsavelValor}>
+        {lote.ownerNome || 'Usuário não identificado'}
+      </Text>
+    </>
+  )}
+</Text>
+
 
             <View style={styles.divisor} />
 
@@ -190,21 +199,38 @@ export function DetalheLoteScreen({ route, navigation }: Props) {
           />
         )}
 
-        {lote && user && lote.ownerId === user.id && !lote.liberado && (
-          <TouchableOpacity
-            style={styles.botaoLiberar}
-            onPress={async () => {
+         {lote && user && lote.ownerId === user.id && !loteLiberado && (
+  <TouchableOpacity
+    style={styles.botaoLiberar}
+    onPress={() => {
+      Alert.alert(
+        'Liberar lote',
+        'Tem certeza que deseja liberar este lote para outro usuário?',
+        [
+          { text: 'Cancelar', style: 'cancel' },
+          {
+            text: 'Liberar',
+            style: 'destructive',
+            onPress: async () => {
               try {
+                setLiberandoOtimista(true); // 👈 oculta o botão imediatamente
                 await liberarLote(lote.id);
-                recarregar();
+                await recarregar();
+                Alert.alert('Sucesso', 'Lote liberado com sucesso!');
               } catch (e: any) {
+                setLiberandoOtimista(false); // 👈 reverte se der erro
                 Alert.alert('Erro ao liberar lote', e.message);
               }
-            }}
-          >
-            <Text style={{ color: '#FFF' }}>Liberar lote para outro usuário</Text>
-          </TouchableOpacity>
-        )}
+            },
+          },
+        ]
+      );
+    }}
+  >
+    <Text style={{ color: '#FFF' }}>Liberar lote para outro usuário</Text>
+  </TouchableOpacity>
+)}
+
 
         {/* Grid de índices */}
         {idx && (

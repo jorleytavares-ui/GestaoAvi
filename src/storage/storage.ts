@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Lote, uid, Encerramento } from '../utils/calculations';
 import { DEFAULT_PESO_SEXAGEM, PontoPesoPadrao, Sexagem } from '../data/padraoSexagem';
 import { DEFAULT_FAIXA_CONFORTO, PontoFaixaConforto } from '../utils/calculations'; // ajuste se vier de outro lugar
-
+import { emitLocalChange } from './localChangeEmitter';
 
 interface PadroesPersistidos {
   [sexagem: string]: PontoPesoPadrao[];
@@ -57,6 +57,7 @@ export async function upsertLote(userId: string, lote: Lote): Promise<void> {
   if (idx >= 0) lotes[idx] = loteComSync;
   else lotes.push(loteComSync);
   await AsyncStorage.setItem(getKeyLotes(userId), JSON.stringify(lotes));
+  emitLocalChange();
 }
 
 async function updateLote(
@@ -75,6 +76,7 @@ async function updateLote(
   const atualizado = updater(lotes[idx]);
   lotes[idx] = { ...atualizado, syncStatus: 'pendente' }; // volta pra fila a cada alteração
   await AsyncStorage.setItem(getKeyLotes(userId), JSON.stringify(lotes));
+  emitLocalChange();
   return lotes[idx];
 }
 
@@ -314,6 +316,7 @@ export async function salvarPadraoPeso(
   const dados: PadroesPersistidos = raw ? JSON.parse(raw) : {};
   dados[sexagem] = pontos;
   await AsyncStorage.setItem(getKeyPadroes(userId), JSON.stringify(dados));
+  emitLocalChange();
 }
 
 // ---------- Encerramento ----------
@@ -560,7 +563,6 @@ export async function setObservacaoAbate(
 }
 
 // ---------- Faixa de conforto (por usuário) ----------
-// ---------- Faixa de conforto (por usuário/dispositivo, com marca de pendência) ----------
 function getKeyFaixaConfortoPendente(userId: string) {
   return `@gestaoavi:faixaConforto:pendente:${userId}`;
 }
@@ -584,6 +586,7 @@ export async function setFaixaConforto(
   // 2) marca como pendente de sync — a sincronização real (push para Supabase)
   // acontece em sync.ts, dentro de sincronizarTudo(), via enviarFaixaConfortoPendente().
   await AsyncStorage.setItem(getKeyFaixaConfortoPendente(userId), 'true');
+  emitLocalChange();
 }
 
 export async function isFaixaConfortoPendente(userId: string): Promise<boolean> {
@@ -624,6 +627,7 @@ export async function migrarIdsInvalidosDeLotes(userId: string): Promise<void> {
 
   if (alterado) {
     await AsyncStorage.setItem(getKeyLotes(userId), JSON.stringify(lotesCorrigidos));
+    emitLocalChange();
   }
 }
 
@@ -669,6 +673,7 @@ export async function deleteLoteLocal(userId: string, loteId: string): Promise<v
   const novos = lotes.filter((l) => l.id !== loteId);
   await AsyncStorage.setItem(getKeyLotes(userId), JSON.stringify(novos));
   await addExclusaoPendente(userId, loteId);
+  emitLocalChange();
 }
 
 export async function setGeradoPor(
@@ -678,6 +683,3 @@ export async function setGeradoPor(
 ): Promise<Lote | undefined> {
   return updateLote(userId, loteId, (lote) => ({ ...lote, geradoPor } as Lote));
 }
-
-
-

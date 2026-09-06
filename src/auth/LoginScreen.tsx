@@ -1,31 +1,54 @@
 import React, { useState } from 'react';
 import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  Alert,
-  ActivityIndicator,
-  ScrollView,
-  KeyboardAvoidingView,
-  Platform,
+  View, Text, TextInput, TouchableOpacity,
+  Alert, ActivityIndicator, ScrollView,
+  KeyboardAvoidingView, Platform, Modal, FlatList,
 } from 'react-native';
 import { useAuth } from './AuthContext';
 import { COLORS } from '../theme/colors';
 
+function formatarCpf(valor: string) {
+  const numeros = valor.replace(/\D/g, '').slice(0, 11);
+  return numeros
+    .replace(/(\d{3})(\d)/, '$1.$2')
+    .replace(/(\d{3})(\d)/, '$1.$2')
+    .replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+}
+
+type OpcaoEmpresa = { email: string; empresaId: string; empresaNome: string };
+
 export function LoginScreen({ navigation }: any) {
-  const { signIn } = useAuth();
-  const [email, setEmail] = useState('');
+  const { signInComCpf, signIn } = useAuth();
+  const [cpf, setCpf] = useState('');
   const [senha, setSenha] = useState('');
   const [carregando, setCarregando] = useState(false);
+  const [opcoes, setOpcoes] = useState<OpcaoEmpresa[]>([]); // ✅ lista de empresas quando há múltiplos vínculos
 
   async function handleLogin() {
-    if (!email || !senha) {
-      Alert.alert('Atenção', 'Preencha e-mail e senha.');
+    const cpfLimpo = cpf.replace(/\D/g, '');
+    if (cpfLimpo.length !== 11 || !senha) {
+      Alert.alert('Atenção', 'Preencha um CPF válido e a senha.');
       return;
     }
     setCarregando(true);
-    const { error } = await signIn(email.trim(), senha);
+    const resultado = await signInComCpf(cpfLimpo, senha);
+    setCarregando(false);
+
+    if (resultado.error) {
+      Alert.alert('Erro ao entrar', resultado.error);
+      return;
+    }
+
+    // ✅ Múltiplos vínculos: abre modal de seleção de empresa
+    if (resultado.opcoes && resultado.opcoes.length > 0) {
+      setOpcoes(resultado.opcoes);
+    }
+  }
+
+  async function handleSelecionarEmpresa(email: string) {
+    setOpcoes([]);
+    setCarregando(true);
+    const { error } = await signIn(email, senha);
     setCarregando(false);
 
     if (error) {
@@ -40,7 +63,7 @@ export function LoginScreen({ navigation }: any) {
       keyboardVerticalOffset={Platform.OS === 'ios' ? 40 : 0}
     >
       <ScrollView
-        contentContainerStyle={{ flexGrow: 1, padding: 24, paddingTop: 100, justifyContent: 'flex-start' }}
+        contentContainerStyle={{ flexGrow: 1, padding: 24, paddingTop: 100 }}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
@@ -49,18 +72,14 @@ export function LoginScreen({ navigation }: any) {
         </Text>
 
         <TextInput
-          placeholder="E-mail"
-          value={email}
-          onChangeText={setEmail}
-          autoCapitalize="none"
-          keyboardType="email-address"
+          placeholder="CPF"
+          value={cpf}
+          onChangeText={(v) => setCpf(formatarCpf(v))}
+          keyboardType="numeric"
+          maxLength={14}
           style={{
-            borderWidth: 1,
-            borderColor: COLORS.line,
-            borderRadius: 10,
-            padding: 14,
-            marginBottom: 12,
-            color: COLORS.ink,
+            borderWidth: 1, borderColor: COLORS.line, borderRadius: 10,
+            padding: 14, marginBottom: 12, color: COLORS.ink,
           }}
           placeholderTextColor={COLORS.inkSoft}
         />
@@ -71,12 +90,8 @@ export function LoginScreen({ navigation }: any) {
           onChangeText={setSenha}
           secureTextEntry
           style={{
-            borderWidth: 1,
-            borderColor: COLORS.line,
-            borderRadius: 10,
-            padding: 14,
-            marginBottom: 20,
-            color: COLORS.ink,
+            borderWidth: 1, borderColor: COLORS.line, borderRadius: 10,
+            padding: 14, marginBottom: 20, color: COLORS.ink,
           }}
           placeholderTextColor={COLORS.inkSoft}
         />
@@ -85,11 +100,8 @@ export function LoginScreen({ navigation }: any) {
           onPress={handleLogin}
           disabled={carregando}
           style={{
-            backgroundColor: COLORS.primary,
-            borderRadius: 10,
-            padding: 16,
-            alignItems: 'center',
-            marginBottom: 16,
+            backgroundColor: COLORS.primary, borderRadius: 10,
+            padding: 16, alignItems: 'center', marginBottom: 16,
           }}
         >
           {carregando ? (
@@ -105,6 +117,45 @@ export function LoginScreen({ navigation }: any) {
           </Text>
         </TouchableOpacity>
       </ScrollView>
+
+      {/* ✅ Modal de seleção de empresa quando o CPF tem múltiplos vínculos */}
+      <Modal visible={opcoes.length > 0} transparent animationType="fade">
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: 'rgba(0,0,0,0.5)',
+            justifyContent: 'center',
+            padding: 24,
+          }}
+        >
+          <View style={{ backgroundColor: '#fff', borderRadius: 12, padding: 20 }}>
+            <Text style={{ fontSize: 18, fontWeight: '700', marginBottom: 12, color: COLORS.ink }}>
+              Este CPF está vinculado a mais de uma empresa. Selecione:
+            </Text>
+            <FlatList
+              data={opcoes}
+              keyExtractor={(item) => item.email}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  onPress={() => handleSelecionarEmpresa(item.email)}
+                  style={{
+                    padding: 14,
+                    borderBottomWidth: 1,
+                    borderBottomColor: COLORS.line,
+                  }}
+                >
+                  <Text style={{ color: COLORS.ink, fontWeight: '600' }}>
+                    {item.empresaNome}
+                  </Text>
+                </TouchableOpacity>
+              )}
+            />
+            <TouchableOpacity onPress={() => setOpcoes([])} style={{ marginTop: 12 }}>
+              <Text style={{ color: COLORS.primary, textAlign: 'center' }}>Cancelar</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }

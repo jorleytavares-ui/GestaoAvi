@@ -5,6 +5,7 @@ import { ChevronLeft } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS } from '../theme/colors';
 import { HeaderMenu } from './HeaderMenu';
+import { usePerfil } from '../hooks/usePerfil';
 
 interface AppHeaderProps {
   onVoltar?: () => void;
@@ -13,6 +14,7 @@ interface AppHeaderProps {
 
 export function AppHeader({ onVoltar, titulo }: AppHeaderProps) {
   const insets = useSafeAreaInsets();
+  const { perfil } = usePerfil();
 
   if (!onVoltar) {
     return (
@@ -21,7 +23,7 @@ export function AppHeader({ onVoltar, titulo }: AppHeaderProps) {
           flexDirection: 'row',
           alignItems: 'flex-start',
           justifyContent: 'space-between',
-          paddingHorizontal: 16, // mesmo valor do card (paddingHorizontal: 16 no HomeScreen)
+          paddingHorizontal: 16,
           paddingBottom: 8,
           paddingTop: insets.top + 12,
         }}
@@ -33,6 +35,11 @@ export function AppHeader({ onVoltar, titulo }: AppHeaderProps) {
           <Text style={{ fontSize: 12, color: COLORS.inkSoft, marginTop: -2 }}>
             Gestão de lotes de frango de corte
           </Text>
+          {!!perfil?.nome && (
+            <Text style={{ fontSize: 12, color: COLORS.inkSoft, marginTop: 2 }}>
+              Usuário: <Text style={{ fontWeight: '600', color: COLORS.ink }}>{perfil.nome}</Text>
+            </Text>
+          )}
         </View>
 
         <HeaderMenu />
@@ -60,4 +67,3 @@ export function AppHeader({ onVoltar, titulo }: AppHeaderProps) {
     </View>
   );
 }
-

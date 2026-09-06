@@ -7,6 +7,7 @@ import { useAuth } from '../auth/AuthContext';
 import { usePerfil } from '../hooks/usePerfil';
 import { sincronizarTudo } from '../storage/sync';
 import { getLotes } from '../storage/storage';
+import { podeCadastrarUsuario } from '../constants/papeis';
 
 export function HeaderMenu() {
   const [visivel, setVisivel] = useState(false);
@@ -98,12 +99,31 @@ export function HeaderMenu() {
               <Text style={styles.itemTexto}>Configurações</Text>
             </TouchableOpacity>
 
+            {podeCadastrarUsuario(perfil?.papelId) && (
+  <>
+    <View style={styles.separador} />
+    <TouchableOpacity
+      style={styles.item}
+      onPress={() => {
+        setVisivel(false);
+        navigation.navigate('CadastroUsuario');
+      }}
+    >
+      <Ionicons name="person-add-outline" size={20} color="#333" />
+      <Text style={styles.itemTexto}>Cadastro de Usuário</Text>
+    </TouchableOpacity>
+  </>
+)}
+
             <View style={styles.separador} />
 
             <TouchableOpacity style={styles.item} onPress={sair}>
               <Ionicons name="log-out-outline" size={20} color="#d32f2f" />
               <Text style={[styles.itemTexto, { color: '#d32f2f' }]}>Sair</Text>
             </TouchableOpacity>
+
+
+            
           </View>
         </TouchableOpacity>
       </Modal>

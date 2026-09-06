@@ -21,7 +21,7 @@ import { Toast } from '../../components/Toast';
 const OPCOES: { valor: ModoSync; label: string; desc: string }[] = [
   { valor: 'intervalo', label: 'Automática', desc: 'Sincroniza a cada X minutos automaticamente.' },
   { valor: 'horario', label: 'Agendada', desc: 'Sincroniza 1x por dia no horário escolhido.' },
-  { valor: 'online', label: 'Sempre online', desc: 'Sincroniza automaticamente sempre que houver conexão.' },
+  { valor: 'online', label: 'Sempre online (Recomendado)', desc: 'Sincroniza automaticamente sempre que houver conexão.' },
   { valor: 'manual', label: 'Manual', desc: 'Só sincroniza quando você tocar em "Sincronizar agora" no menu.' },
   { valor: 'offline', label: 'Sempre offline', desc: 'Não sincroniza dados. Apenas revalida a licença periodicamente.' },
 ];
@@ -71,32 +71,41 @@ export function SincronizacaoConfig() {
       <Text style={styles.titulo}>Sincronização</Text>
 
       {OPCOES.map((op) => (
-        <Pressable key={op.valor} style={styles.opcao} onPress={() => setModo(op.valor)}>
-          <View style={[styles.radio, modo === op.valor && styles.radioAtivo]} />
-          <View style={{ flex: 1 }}>
-            <Text style={styles.opcaoLabel}>{op.label}</Text>
-            <Text style={styles.opcaoDesc}>{op.desc}</Text>
-          </View>
-        </Pressable>
-      ))}
+  <View key={op.valor}>
+    <Pressable style={styles.opcao} onPress={() => setModo(op.valor)}>
+      <View style={[styles.radio, modo === op.valor && styles.radioAtivo]} />
+      <View style={{ flex: 1 }}>
+        <Text style={styles.opcaoLabel}>{op.label}</Text>
+        <Text style={styles.opcaoDesc}>{op.desc}</Text>
+      </View>
+    </Pressable>
 
-      {modo === 'horario' && (
-        <View style={{ marginTop: 12 }}>
-          <DateField label="Horário da sincronização" mode="time" value={horaDate} onChange={setHoraDate} />
-        </View>
-      )}
+    {/* ✅ Campo de horário aparece logo abaixo da opção "Agendada" quando selecionada */}
+    {op.valor === 'horario' && modo === 'horario' && (
+      <View style={{ marginLeft: 28, marginBottom: 8 }}>
+        <DateField
+          label="Horário da sincronização"
+          mode="time"
+          value={horaDate}
+          onChange={setHoraDate}
+        />
+      </View>
+    )}
 
-      {modo === 'intervalo' && (
-        <View style={{ marginTop: 12 }}>
-          <TextField
-            label="Intervalo (minutos)"
-            keyboardType="numeric"
-            value={intervalo}
-            onChangeText={setIntervalo}
-            placeholder="30"
-          />
-        </View>
-      )}
+    {/* ✅ Campo de intervalo aparece logo abaixo da opção "Automática" quando selecionada */}
+    {op.valor === 'intervalo' && modo === 'intervalo' && (
+      <View style={{ marginLeft: 28, marginBottom: 8 }}>
+        <TextField
+          label="Intervalo (minutos)"
+          keyboardType="numeric"
+          value={intervalo}
+          onChangeText={setIntervalo}
+          placeholder="30"
+        />
+      </View>
+    )}
+  </View>
+))}
 
       <View style={{ marginTop: 20 }}>
         <SalvarButton onPress={salvar} />

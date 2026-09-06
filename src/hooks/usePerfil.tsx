@@ -4,12 +4,13 @@ import NetInfo from '@react-native-community/netinfo';
 import { useAuth } from '../auth/AuthContext';
 import { supabase } from '../lib/supabase';
 import { salvarPerfilCache, getPerfilCache } from '../storage/perfilCache';
+import { PapelId } from '../constants/papeis';
 
 type Perfil = {
   id: string;
   nome: string;
   empresa_id: string;
-  papel: 'admin' | string;
+  papelId: PapelId;
 };
 
 export function usePerfil() {
@@ -39,11 +40,10 @@ export function usePerfil() {
           id: cache.id,
           nome: cache.nome,
           empresa_id: cache.empresaId,
-          papel: cache.papel,
+          papelId: cache.papelId,
         });
         setOwnerId(cache.ownerId);
       } else {
-        // Sem cache local e sem rede: não há como montar o perfil
         setPerfil(null);
         setOwnerId(null);
       }
@@ -54,19 +54,18 @@ export function usePerfil() {
     // ---------- MODO ONLINE: busca no servidor e atualiza o cache ----------
     const { data, error } = await supabase
       .from('perfis')
-      .select('id, nome, empresa_id, papel')
+      .select('id, nome, empresa_id, papel_id, precisa_redefinir_senha')
       .eq('id', user.id)
       .maybeSingle();
 
     if (error || !data) {
-      // Se falhou online por algum motivo, tenta cair pro cache como último recurso
       const cache = await getPerfilCache(user.id);
       if (cache) {
         setPerfil({
           id: cache.id,
           nome: cache.nome,
           empresa_id: cache.empresaId,
-          papel: cache.papel,
+          papelId: cache.papelId,
         });
         setOwnerId(cache.ownerId);
       } else {
@@ -77,7 +76,12 @@ export function usePerfil() {
       return;
     }
 
-    setPerfil(data);
+    setPerfil({
+      id: data.id,
+      nome: data.nome,
+      empresa_id: data.empresa_id,
+      papelId: data.papel_id,
+    });
 
     const { data: empresa } = await supabase
       .from('empresas')
@@ -93,8 +97,9 @@ export function usePerfil() {
       id: data.id,
       nome: data.nome,
       empresaId: data.empresa_id,
-      papel: data.papel,
+      papelId: data.papel_id,
       ownerId: ownerIdResolvido,
+      precisaRedefinirSenha: !!data.precisa_redefinir_senha,
     });
 
     setCarregandoPerfil(false);

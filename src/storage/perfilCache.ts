@@ -1,12 +1,14 @@
 // src/storage/perfilCache.ts
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { PapelId } from '../constants/papeis';
 
 type PerfilCache = {
   id: string;
   nome: string;
   empresaId: string;
-  papel: string;
+  papelId: PapelId;
   ownerId: string;
+  precisaRedefinirSenha: boolean; // 👈 apenas o tipo, sem lógica aqui
 };
 
 function chave(userId: string) {

@@ -9,13 +9,15 @@ import * as Crypto from 'expo-crypto';
 const INDICE_KEY = 'gestaoavi_vault_indice';
 
 type CredencialSalva = {
+  userId: string;
   email: string;
+  cpf?: string; // ✅ novo campo
   senhaHash: string;
   accessToken: string;
   refreshToken: string;
   empresaId: string | null;
   ownerId: string | null;
-  ultimoLoginOnline: string; // ISO
+  ultimoLoginOnline: string;
 };
 
 // ---------- Utils ----------
@@ -62,7 +64,9 @@ async function adicionarAoIndice(email: string): Promise<void> {
  * Deve ser chamado sempre após um login online bem-sucedido.
  */
 export async function salvarCredencialLocal(params: {
+  userId: string;
   email: string;
+  cpf?: string; // ✅
   senha: string;
   accessToken: string;
   refreshToken: string;
@@ -70,10 +74,12 @@ export async function salvarCredencialLocal(params: {
   ownerId: string | null;
 }): Promise<void> {
   const emailNorm = params.email.trim().toLowerCase();
-  const senhaHash = await hashSenha(params.senha, emailNorm); // ✅ salt = e-mail
+  const senhaHash = await hashSenha(params.senha, emailNorm);
 
   const credencial: CredencialSalva = {
+    userId: params.userId,
     email: emailNorm,
+    cpf: params.cpf?.replace(/\D/g, ''),
     senhaHash,
     accessToken: params.accessToken,
     refreshToken: params.refreshToken,
@@ -85,6 +91,23 @@ export async function salvarCredencialLocal(params: {
   await SecureStore.setItemAsync(chaveDoEmail(emailNorm), JSON.stringify(credencial));
   await adicionarAoIndice(emailNorm);
 }
+
+// Retorna todos os e-mails salvos localmente vinculados a esse CPF
+export async function buscarEmailLocalPorCpf(cpf: string): Promise<string[]> {
+  const indice = await getIndice();
+  const emailsEncontrados: string[] = [];
+
+  for (const email of indice) {
+    const raw = await SecureStore.getItemAsync(chaveDoEmail(email));
+    if (raw) {
+      const cred: CredencialSalva = JSON.parse(raw);
+      if (cred.cpf === cpf) emailsEncontrados.push(cred.email);
+    }
+  }
+
+  return emailsEncontrados;
+}
+
 
 /**
  * Verifica se existe uma credencial local para esse e-mail,

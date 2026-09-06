@@ -96,7 +96,10 @@ export function HomeScreen({ navigation }: Props) {
                   avesVivas={idx.avesVivas}
                   quantidadeAlojadaTotal={idx.quantidadeAlojadaTotal}
                   numGalpoes={lote.galpoes.length}
-                  onPress={() => navigation.navigate('DetalheLote', { loteId: lote.id })}
+                  liberado={lote.liberado} // 👈 novo
+  ownerId={lote.ownerId} // 👈 novo
+  ownerNome={lote.ownerNome} // 👈 novo
+  onPress={() => navigation.navigate('DetalheLote', { loteId: lote.id })}
                 />
               );
             })

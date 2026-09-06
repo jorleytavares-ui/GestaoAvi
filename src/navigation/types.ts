@@ -9,7 +9,9 @@ export type RootStackParamList = {
   DetalheLote: { loteId: string };
   EncerrarForm: { loteId: string };
   Configuracoes: undefined;
+  CadastroUsuario: undefined;
 };
+
 
 
 // src/navigation/types.ts

@@ -1,29 +1,67 @@
 import React, { useState } from 'react';
 import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  Alert,
-  ActivityIndicator,
-  ScrollView,
-  KeyboardAvoidingView,
-  Platform,
+  View, Text, TextInput, TouchableOpacity, Alert,
+  ActivityIndicator, ScrollView, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { useAuth } from './AuthContext';
 import { COLORS } from '../theme/colors';
+
+function formatarCpf(valor: string) {
+  const numeros = valor.replace(/\D/g, '').slice(0, 11);
+  return numeros
+    .replace(/(\d{3})(\d)/, '$1.$2')
+    .replace(/(\d{3})(\d)/, '$1.$2')
+    .replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+}
+
+function validarCpf(cpf: string): boolean {
+  const nums = cpf.replace(/\D/g, '');
+  if (nums.length !== 11 || /^(\d)\1{10}$/.test(nums)) return false;
+
+  let soma = 0;
+  for (let i = 0; i < 9; i++) soma += parseInt(nums[i]) * (10 - i);
+  let resto = (soma * 10) % 11;
+  if (resto === 10) resto = 0;
+  if (resto !== parseInt(nums[9])) return false;
+
+  soma = 0;
+  for (let i = 0; i < 10; i++) soma += parseInt(nums[i]) * (11 - i);
+  resto = (soma * 10) % 11;
+  if (resto === 10) resto = 0;
+  if (resto !== parseInt(nums[10])) return false;
+
+  return true;
+}
+
+// ✅ agora e-mail é obrigatório neste formulário
+function validarEmail(email: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
 
 export function CadastroScreen({ navigation }: any) {
   const { signUp } = useAuth();
   const [nomeEmpresa, setNomeEmpresa] = useState('');
   const [nomeUsuario, setNomeUsuario] = useState('');
-  const [email, setEmail] = useState('');
+  const [cpf, setCpf] = useState('');
+  const [emailContato, setEmailContato] = useState(''); // ✅ obrigatório neste form
   const [senha, setSenha] = useState('');
   const [carregando, setCarregando] = useState(false);
 
   async function handleCadastro() {
-    if (!nomeEmpresa || !nomeUsuario || !email || !senha) {
+    const cpfLimpo = cpf.replace(/\D/g, '');
+    const emailLimpo = emailContato.trim();
+
+    // ✅ todos os campos obrigatórios, incluindo e-mail
+    if (!nomeEmpresa || !nomeUsuario || !cpfLimpo || !emailLimpo || !senha) {
       Alert.alert('Atenção', 'Preencha todos os campos.');
+      return;
+    }
+    if (!validarCpf(cpfLimpo)) {
+      Alert.alert('Atenção', 'CPF inválido. Verifique e tente novamente.');
+      return;
+    }
+    if (!validarEmail(emailLimpo)) {
+      Alert.alert('Atenção', 'E-mail inválido.');
       return;
     }
     if (senha.length < 6) {
@@ -32,16 +70,19 @@ export function CadastroScreen({ navigation }: any) {
     }
 
     setCarregando(true);
-    const { error } = await signUp(email.trim(), senha, nomeEmpresa.trim(), nomeUsuario.trim());
+    const { error } = await signUp(
+      senha,
+      nomeEmpresa.trim(),
+      nomeUsuario.trim(),
+      cpfLimpo,
+      emailLimpo // ✅ sempre enviado, pois agora é obrigatório
+    );
     setCarregando(false);
 
     if (error) {
       Alert.alert('Erro ao cadastrar', error);
     } else {
-      Alert.alert(
-        'Cadastro concluído',
-        'Verifique seu e-mail para confirmar a conta (se a confirmação estiver ativada).'
-      );
+      Alert.alert('Cadastro concluído', 'Sua empresa foi criada com sucesso!');
     }
   }
 
@@ -77,9 +118,20 @@ export function CadastroScreen({ navigation }: any) {
         />
 
         <TextInput
+          placeholder="CPF"
+          value={cpf}
+          onChangeText={(v) => setCpf(formatarCpf(v))}
+          keyboardType="numeric"
+          maxLength={14}
+          style={inputStyle}
+          placeholderTextColor={COLORS.inkSoft}
+        />
+
+        {/* ✅ E-mail agora obrigatório neste formulário */}
+        <TextInput
           placeholder="E-mail"
-          value={email}
-          onChangeText={setEmail}
+          value={emailContato}
+          onChangeText={setEmailContato}
           autoCapitalize="none"
           keyboardType="email-address"
           style={inputStyle}

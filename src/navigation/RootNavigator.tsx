@@ -15,6 +15,8 @@ import { useLicenca } from '../hooks/useLicenca';
 import { LicencaBloqueadaScreen } from '../screens/LicencaBloqueadaScreen';
 import type { RootStackParamList, AuthStackParamList } from './types';
 import { COLORS } from '../theme/colors';
+import { CadastroUsuarioScreen } from '../screens/CadastroUsuarioScreen';
+import { TrocarSenhaObrigatoria } from '../screens/TrocarSenhaObrigatoria'; // ✅ novo
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const AuthStack = createNativeStackNavigator<AuthStackParamList>();
@@ -39,6 +41,11 @@ function AppNavigator() {
         name="Configuracoes"
         component={ConfiguracoesScreen}
         options={{ headerShown: true, title: 'Configurações' }}
+      />
+      <Stack.Screen
+        name="CadastroUsuario"
+        component={CadastroUsuarioScreen}
+        options={{ headerShown: true, title: 'Cadastro de Usuário' }}
       />
     </Stack.Navigator>
   );
@@ -95,7 +102,7 @@ function LicencaGate({ children }: { children: React.ReactNode }) {
 }
 
 export function RootNavigator() {
-  const { session, carregandoSessao } = useAuth();
+  const { session, carregandoSessao, precisaRedefinirSenha } = useAuth(); // ✅ novo
 
   if (carregandoSessao) {
     return <Loading />;
@@ -103,6 +110,11 @@ export function RootNavigator() {
 
   if (!session) {
     return <AuthNavigator />;
+  }
+
+  // ✅ Bloqueia o acesso ao app até o usuário trocar a senha temporária
+  if (precisaRedefinirSenha) {
+    return <TrocarSenhaObrigatoria />;
   }
 
   return (

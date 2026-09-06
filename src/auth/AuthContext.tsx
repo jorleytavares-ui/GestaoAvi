@@ -7,25 +7,37 @@ import {
   salvarCredencialLocal,
   validarCredencialLocal,
   getCredencialSalva,
+  buscarEmailLocalPorCpf,
 } from './authVault';
 import { salvarPerfilCache, getPerfilCache } from '../storage/perfilCache';
 import { sincronizarRelogioServidor } from '../services/serverTime';
 import { baixarLotesDoServidor, baixarFaixaConforto } from '../storage/sync';
+import { PAPEL_ID } from '../constants/papeis';
+import * as Crypto from 'expo-crypto';
+
+type OpcaoEmpresa = { email: string; empresaId: string; empresaNome: string };
 
 type AuthContextData = {
   session: Session | null;
   user: User | null;
   userId: string | null;
-  offline: boolean; // true quando a sessão ativa veio do cofre local, sem validação no servidor
+  offline: boolean;
   carregandoSessao: boolean;
+  precisaRedefinirSenha: boolean;
   signIn: (email: string, senha: string) => Promise<{ error?: string }>;
+  signInComCpf: (
+    cpf: string,
+    senha: string
+  ) => Promise<{ error?: string; opcoes?: OpcaoEmpresa[] }>;
   signUp: (
-    email: string,
     senha: string,
     nomeEmpresa: string,
-    nomeUsuario: string
+    nomeUsuario: string,
+    cpf: string,
+    emailContato?: string
   ) => Promise<{ error?: string }>;
   signOut: () => Promise<void>;
+  atualizarSenhaPropria: (novaSenha: string) => Promise<{ error?: string }>;
 };
 
 const AuthContext = createContext<AuthContextData>({} as AuthContextData);
@@ -34,6 +46,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [offline, setOffline] = useState(false);
   const [carregandoSessao, setCarregandoSessao] = useState(true);
+  const [precisaRedefinirSenha, setPrecisaRedefinirSenha] = useState(false);
+
+  async function verificarNecessidadeRedefinicao(userId: string, tempClient?: any) {
+    const client = tempClient ?? supabase;
+    const { data } = await client
+      .from('perfis')
+      .select('precisa_redefinir_senha')
+      .eq('id', userId)
+      .maybeSingle();
+
+    setPrecisaRedefinirSenha(!!data?.precisa_redefinir_senha);
+  }
 
   useEffect(() => {
     async function verificarSessao() {
@@ -50,9 +74,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           } else {
             setSession(sessionData.session);
             setOffline(false);
+            const perfilCache = await getPerfilCache(); // 👈
+  setPrecisaRedefinirSenha(!!perfilCache?.precisaRedefinirSenha);
+            await verificarNecessidadeRedefinicao(userData.user.id);
           }
         } else {
-          // Sem rede: aceita a sessão local salva pelo SDK, sem validar no servidor
           setSession(sessionData.session);
           setOffline(true);
         }
@@ -74,7 +100,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   async function criarEmpresaPerfilELicenca(
-    tempClient: ReturnType<typeof createClient>,
+    tempClient: any,
     userId: string,
     nomeUsuario: string,
     nomeEmpresa: string
@@ -93,7 +119,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       id: userId,
       nome: nomeUsuario,
       empresa_id: empresaData.id,
-      papel: 'admin',
+      papel_id: PAPEL_ID.ADMIN,
     });
 
     if (perfilError) {
@@ -116,7 +142,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return { empresaId: empresaData.id };
   }
 
-  // ---------- LOGIN ONLINE ----------
+  async function buscarEmailPorCpf(
+    cpf: string
+  ): Promise<{ email?: string; opcoes?: OpcaoEmpresa[]; error?: string }> {
+    const cpfLimpo = cpf.replace(/\D/g, '');
+
+    const { data, error } = await supabase.functions.invoke('buscar-email-por-cpf', {
+      body: { cpf: cpfLimpo },
+    });
+
+    if (error) return { error: 'Erro ao buscar CPF. Verifique sua conexão.' };
+    if (data?.error) return { error: data.error };
+
+    if (data?.opcoes) return { opcoes: data.opcoes };
+    return { email: data.email };
+  }
+
   async function signInOnline(email: string, senha: string) {
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
@@ -138,7 +179,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const { data: perfilExistente, error: perfilCheckError } = await tempClient
       .from('perfis')
-      .select('id, nome, empresa_id, papel')
+      .select('id, nome, empresa_id, papel_id, cpf, precisa_redefinir_senha')
       .eq('id', userId)
       .maybeSingle();
 
@@ -146,7 +187,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     let empresaId: string | null = perfilExistente?.empresa_id ?? null;
     let nome = perfilExistente?.nome ?? email.split('@')[0];
-    let papel = perfilExistente?.papel ?? 'admin';
+    let papelId = perfilExistente?.papel_id ?? PAPEL_ID.ADMIN;
+    const cpf: string | undefined = (perfilExistente as any)?.cpf ?? undefined;
+
+    if (perfilExistente) {
+      setPrecisaRedefinirSenha(!!(perfilExistente as any)?.precisa_redefinir_senha);
+    }
 
     if (!perfilExistente) {
       const metadata = data.user.user_metadata ?? {};
@@ -163,10 +209,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (resultado.error) return { error: resultado.error };
       empresaId = resultado.empresaId ?? null;
       nome = nomeUsuario;
-      papel = 'admin';
+      papelId = PAPEL_ID.ADMIN;
+      setPrecisaRedefinirSenha(false);
     }
 
-    // Busca owner_id da empresa (para o cache de perfil)
     let ownerId = userId;
     if (empresaId) {
       const { data: empresa } = await tempClient
@@ -179,9 +225,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     await sincronizarRelogioServidor();
 
-    // Salva credenciais no cofre local + cache de perfil (permite login offline depois)
     await salvarCredencialLocal({
+      userId,
       email,
+      cpf,
       senha,
       accessToken: data.session.access_token,
       refreshToken: data.session.refresh_token,
@@ -194,19 +241,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         id: userId,
         nome,
         empresaId,
-        papel,
+        papelId,
         ownerId,
       });
 
-      // ✅ Ativa a sessão ANTES do pull, pois getUsuarioAtualId() em sync.ts
-      // depende de supabase.auth.getSession() para resolver o userId.
       setSession(data.session);
       setOffline(false);
 
-      // ✅ Garante que os lotes da empresa sejam buscados já no login,
-      // independente do modo de sincronização configurado pelo usuário.
-      // Falhas aqui não bloqueiam o login (ex: lentidão de rede) —
-      // o useAutoSync tentará novamente em seguida.
       try {
         await baixarLotesDoServidor(empresaId);
         await baixarFaixaConforto(empresaId);
@@ -223,7 +264,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return {};
   }
 
-  // ---------- LOGIN OFFLINE (via cofre local) ----------
   async function signInOffline(email: string, senha: string) {
     const credencial = await validarCredencialLocal(email, senha);
 
@@ -234,17 +274,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       };
     }
 
-    // Restaura a sessão do Supabase com os tokens salvos (sem contato com o servidor)
     const { error } = await supabase.auth.setSession({
       access_token: credencial.accessToken,
       refresh_token: credencial.refreshToken,
     });
 
     if (error) {
-      // Tokens podem ter sido invalidados/expirados localmente pelo SDK; ainda assim
-      // seguimos liberando o acesso offline, montando uma sessão "manual" mínima.
-      // (Os dados operacionais do app dependem do userId, não da validade do token em si.)
+      // segue liberando acesso offline mesmo assim
     }
+
+    // 👇 aplica o flag cacheado
+  const perfilCache = await getPerfilCache(credencial.userId);
+  setPrecisaRedefinirSenha(!!perfilCache?.precisaRedefinirSenha);
 
     setOffline(true);
     setCarregandoSessao(false);
@@ -252,131 +293,134 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return {};
   }
 
-  // ---------- LOGIN (decide online/offline) ----------
   async function signIn(email: string, senha: string) {
     const net = await NetInfo.fetch();
 
     if (net.isConnected) {
-      const resultadoOnline = await signInOnline(email, senha);
-      if (!resultadoOnline.error) return resultadoOnline;
-
-      // Se falhou online por erro de credencial (não por falta de rede),
-      // não tentamos offline — evita mascarar senha errada.
-      return resultadoOnline;
+      return signInOnline(email, senha);
     }
 
-    // Sem rede: tenta direto pelo cofre local
     return signInOffline(email, senha);
   }
 
-    async function signUp(
-    email: string,
-    senha: string,
-    nomeEmpresa: string,
-    nomeUsuario: string
-  ) {
-    const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-      email,
-      password: senha,
-      options: {
-        data: {
-          nome_usuario: nomeUsuario,
-          nome_empresa: nomeEmpresa,
-        },
-      },
-    });
+  async function signInComCpf(cpf: string, senha: string) {
+    const net = await NetInfo.fetch();
+    const cpfLimpo = cpf.replace(/\D/g, '');
 
-    if (signUpError) {
-      return { error: signUpError.message };
+    if (net.isConnected) {
+      const resultado = await buscarEmailPorCpf(cpfLimpo);
+
+      if (resultado.error) return { error: resultado.error };
+
+      if (resultado.opcoes) {
+        return { opcoes: resultado.opcoes };
+      }
+
+      return signIn(resultado.email!, senha);
     }
 
-    if (!signUpData.user) {
-      return { error: 'Não foi possível criar o usuário.' };
-    }
+    const emailsSalvos = await buscarEmailLocalPorCpf(cpfLimpo);
 
-    if (!signUpData.session) {
+    if (emailsSalvos.length === 0) {
       return {
         error:
-          'Cadastro criado! Confirme seu e-mail antes de continuar (a empresa será criada no primeiro login).',
+          'CPF não encontrado neste aparelho. Conecte-se à internet ao menos uma vez para habilitar o acesso offline.',
       };
     }
 
-    const userId = signUpData.user.id;
-    const token = signUpData.session.access_token;
-
-    const tempClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-      global: { headers: { Authorization: `Bearer ${token}` } },
-      auth: { persistSession: false, autoRefreshToken: false },
-    });
-
-    const resultado = await criarEmpresaPerfilELicenca(
-      tempClient,
-      userId,
-      nomeUsuario,
-      nomeEmpresa
-    );
-
-    if (resultado.error) {
-      return { error: resultado.error };
+    if (emailsSalvos.length === 1) {
+      return signIn(emailsSalvos[0], senha);
     }
 
-    await supabase.auth.setSession({
-      access_token: signUpData.session.access_token,
-      refresh_token: signUpData.session.refresh_token,
+    return {
+      opcoes: emailsSalvos.map((email) => ({ email, empresaId: '', empresaNome: email })),
+    };
+  }
+
+  async function signUp(
+    senha: string,
+    nomeEmpresa: string,
+    nomeUsuario: string,
+    cpf: string,
+    emailContato?: string
+  ) {
+    const cpfLimpo = cpf.replace(/\D/g, '');
+    const empresaId = Crypto.randomUUID();
+    const emailSintetico = `${cpfLimpo}-${empresaId}@gestaoavi.com`;
+
+    const { data, error } = await supabase.functions.invoke('cadastrar-empresa', {
+      body: { empresaId, nomeEmpresa, nomeUsuario, cpf: cpfLimpo, senha, emailContato },
     });
 
-    // Salva no cofre local também no cadastro (garante acesso offline futuro)
+    if (error) return { error: 'Erro ao cadastrar. Verifique sua conexão.' };
+    if (data?.error) return { error: data.error };
+
+    const { data: loginData, error: loginError } = await supabase.auth.signInWithPassword({
+      email: emailSintetico,
+      password: senha,
+    });
+
+    if (loginError || !loginData.session) {
+      return { error: 'Empresa criada, mas houve erro ao iniciar sessão. Tente fazer login.' };
+    }
+
+    const userId = loginData.user!.id;
+
     await salvarCredencialLocal({
-      email,
+      userId,
+      email: emailSintetico,
+      cpf: cpfLimpo,
       senha,
-      accessToken: signUpData.session.access_token,
-      refreshToken: signUpData.session.refresh_token,
-      empresaId: resultado.empresaId ?? null,
+      accessToken: loginData.session.access_token,
+      refreshToken: loginData.session.refresh_token,
+      empresaId,
       ownerId: userId,
     });
 
-    if (resultado.empresaId) {
-      await salvarPerfilCache({
-        id: userId,
-        nome: nomeUsuario,
-        empresaId: resultado.empresaId,
-        papel: 'admin',
-        ownerId: userId,
-      });
+    await salvarPerfilCache({
+      id: userId,
+      nome: nomeUsuario,
+      empresaId,
+      papelId: PAPEL_ID.ADMIN,
+      ownerId: userId,
+    });
 
-      // ✅ Ativa a sessão ANTES do pull, pelo mesmo motivo do signInOnline:
-      // getUsuarioAtualId() em sync.ts depende de getSession() já resolvido.
-      setSession(signUpData.session);
-      setOffline(false);
-
-      // ✅ Consistência com o signInOnline. Na prática não trará nenhum lote
-      // (empresa recém-criada), mas garante que o merge local/servidor já
-      // aconteça desde o primeiro momento, sem depender do useAutoSync.
-      try {
-        await baixarLotesDoServidor(resultado.empresaId);
-        await baixarFaixaConforto(resultado.empresaId);
-      } catch (e) {
-        console.log('Pull inicial de lotes falhou (será tentado novamente pelo auto-sync):', e);
-      }
-
-      return {};
-    }
-
-    setSession(signUpData.session);
+    setSession(loginData.session);
     setOffline(false);
+    setPrecisaRedefinirSenha(false);
+
+    try {
+      await baixarLotesDoServidor(empresaId);
+      await baixarFaixaConforto(empresaId);
+    } catch (e) {
+      console.log('Pull inicial de lotes falhou:', e);
+    }
 
     return {};
   }
 
+  async function atualizarSenhaPropria(novaSenha: string) {
+    if (novaSenha.length < 6) {
+      return { error: 'A senha deve ter no mínimo 6 caracteres.' };
+    }
 
-  // ---------- SAIR ----------
-  // IMPORTANTE: só limpa a sessão ATIVA. O cofre local (credenciais salvas)
-  // permanece intacto, permitindo que o mesmo ou outro usuário
-  // faça login offline neste aparelho depois.
+    const { error } = await supabase.auth.updateUser({ password: novaSenha });
+    if (error) return { error: error.message };
+
+    const userId = session?.user?.id;
+    if (userId) {
+      await supabase.from('perfis').update({ precisa_redefinir_senha: false }).eq('id', userId);
+    }
+
+    setPrecisaRedefinirSenha(false);
+    return {};
+  }
+
   async function signOut() {
     await supabase.auth.signOut();
     setSession(null);
     setOffline(false);
+    setPrecisaRedefinirSenha(false);
   }
 
   return (
@@ -387,9 +431,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         userId: session?.user?.id ?? null,
         offline,
         carregandoSessao,
+        precisaRedefinirSenha,
         signIn,
+        signInComCpf,
         signUp,
         signOut,
+        atualizarSenhaPropria,
       }}
     >
       {children}
