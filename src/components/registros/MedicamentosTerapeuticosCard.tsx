@@ -137,7 +137,7 @@ export default function MedicamentosTerapeuticosCard({ lote, onChanged }: Props)
         onChange={(d) => setData(fromDate(d))}
       />
 
-      <TextField label="Produto" placeholder="Ex: Amoxicilina" value={produto} onChangeText={setProduto} />
+      <TextField label="Produto" placeholder="Ex: Remédio" value={produto} onChangeText={setProduto} />
 
       <View style={styles.row}>
         <View style={styles.rowItem}>

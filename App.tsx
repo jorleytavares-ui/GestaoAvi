@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
+import { View, Text } from 'react-native';
 import { useFonts } from 'expo-font';
 import "./global.css";
 
@@ -47,7 +48,7 @@ function AppInterno() {
 }
 
 export default function App() {
-  const [fontsLoaded] = useFonts({
+  const [fontsLoaded, fontError] = useFonts({
     ZillaSlab_600SemiBold,
     ZillaSlab_700Bold,
     WorkSans_400Regular,
@@ -57,7 +58,19 @@ export default function App() {
     IBMPlexMono_600SemiBold,
   });
 
-  if (!fontsLoaded) return null;
+  console.log('fontsLoaded:', fontsLoaded, 'fontError:', fontError);
+
+  if (fontError) {
+    console.error('Erro ao carregar fontes:', fontError);
+  }
+
+  if (!fontsLoaded) {
+    return (
+      <View style={{ flex: 1, backgroundColor: 'red', justifyContent: 'center' }}>
+        <Text style={{ color: 'white' }}>Carregando fontes...</Text>
+      </View>
+    );
+  }
 
   return (
     <AuthProvider>

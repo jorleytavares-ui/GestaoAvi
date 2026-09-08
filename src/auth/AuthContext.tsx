@@ -74,8 +74,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           } else {
             setSession(sessionData.session);
             setOffline(false);
-            const perfilCache = await getPerfilCache(); // 👈
-  setPrecisaRedefinirSenha(!!perfilCache?.precisaRedefinirSenha);
+            const perfilCache = await getPerfilCache(userData.user.id);
+            setPrecisaRedefinirSenha(!!perfilCache?.precisaRedefinirSenha);
             await verificarNecessidadeRedefinicao(userData.user.id);
           }
         } else {
@@ -236,30 +236,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       ownerId,
     });
 
-    if (empresaId) {
-      await salvarPerfilCache({
-        id: userId,
-        nome,
-        empresaId,
-        papelId,
-        ownerId,
-      });
-
-      setSession(data.session);
-      setOffline(false);
-
-      try {
-        await baixarLotesDoServidor(empresaId);
-        await baixarFaixaConforto(empresaId);
-      } catch (e) {
-        console.log('Pull inicial de lotes falhou (será tentado novamente pelo auto-sync):', e);
-      }
-
-      return {};
-    }
+    await salvarPerfilCache({
+      id: userId,
+      nome,
+      empresaId: empresaId ?? '',
+      papelId,
+      ownerId,
+      precisaRedefinirSenha,
+    });
 
     setSession(data.session);
     setOffline(false);
+
+    try {
+  await baixarLotesDoServidor(empresaId ?? '');
+  await baixarFaixaConforto(empresaId ?? '');
+} catch (e) {
+  console.log('Pull inicial de lotes falhou (será tentado novamente pelo auto-sync):', e);
+}
+
 
     return {};
   }
@@ -284,8 +279,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     // 👇 aplica o flag cacheado
-  const perfilCache = await getPerfilCache(credencial.userId);
-  setPrecisaRedefinirSenha(!!perfilCache?.precisaRedefinirSenha);
+    const perfilCache = await getPerfilCache(credencial.userId);
+    setPrecisaRedefinirSenha(!!perfilCache?.precisaRedefinirSenha);
 
     setOffline(true);
     setCarregandoSessao(false);
@@ -380,9 +375,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await salvarPerfilCache({
       id: userId,
       nome: nomeUsuario,
-      empresaId,
+      empresaId: empresaId ?? '',
       papelId: PAPEL_ID.ADMIN,
       ownerId: userId,
+      precisaRedefinirSenha: false, // usuário recém-criado não precisa redefinir
     });
 
     setSession(loginData.session);

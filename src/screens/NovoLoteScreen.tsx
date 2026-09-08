@@ -1,6 +1,7 @@
 // src/screens/NovoLoteScreen.tsx
 import React from 'react';
 import { View, Alert } from 'react-native';
+import { useAuth } from '../auth/AuthContext';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 import { AppHeader } from '../components/AppHeader';
@@ -15,16 +16,26 @@ type Props = NativeStackScreenProps<RootStackParamList, 'NovoLote'>;
 
 export function NovoLoteScreen({ navigation }: Props) {
   const { podeCriarLote, motivoBloqueio, recarregar } = useLicenca();
+  const { userId } = useAuth(); // 👈 pega o userId
 
   const handleSalvarLote = async (lote: Lote) => {
+    if (!userId) {
+      Alert.alert('Erro', 'Usuário não autenticado.');
+      return;
+    }
+
     if (!podeCriarLote) {
       Alert.alert('Acesso bloqueado', motivoBloqueio ?? 'Não é possível criar lote.');
       return;
     }
 
-    await upsertLote(lote);
-    recarregar(); // atualiza contador de licença na UI (Home, etc.)
-    navigation.goBack();
+    try {
+      await upsertLote(userId, lote); // 👈 corrigido
+      recarregar();
+      navigation.goBack();
+    } catch (e: any) {
+      Alert.alert('Erro ao salvar lote', e?.message ?? 'Tente novamente.');
+    }
   };
 
   return (
