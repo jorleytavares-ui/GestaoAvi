@@ -28,6 +28,36 @@ interface GalpaoFormData {
   racaoLinhasIncentivoQtd: string;
 }
 
+// helpers no topo do arquivo (fora do componente)
+function hhmmParaDate(hhmm: string | null): Date | null {
+  if (!hhmm) return null;
+  const [h, m] = hhmm.split(':').map(Number);
+  const d = new Date();
+  d.setHours(h, m, 0, 0);
+  return d;
+}
+
+function galpaoParaFormData(g: Galpao): GalpaoFormData {
+  return {
+    id: g.id,
+    nome: g.nome ?? '',
+    quantidadeAlojada: String(g.quantidadeAlojada ?? ''),
+    pesoMedioAlojadoG: g.pesoMedioAlojadoG != null ? String(g.pesoMedioAlojadoG) : '',
+    temperaturaAviario: g.temperaturaAviario != null ? String(g.temperaturaAviario) : '',
+    pintosMortos: g.pintosMortos != null ? String(g.pintosMortos) : '',
+    horaCarregamento: hhmmParaDate(g.horaCarregamento),
+    horaChegada: hhmmParaDate(g.horaChegada),
+    horaDescarregamento: hhmmParaDate(g.horaDescarregamento),
+    aspecto: g.aspecto ?? '',
+    racaoComedouro: (g.racaoComedouro as any) ?? '',
+    aguaBebedouro: (g.aguaBebedouro as any) ?? '',
+    aquecedorLigado: (g.aquecedorLigado as any) ?? '',
+    racaoLinhasIncentivo: (g.racaoLinhasIncentivo as any) ?? '',
+    racaoLinhasIncentivoQtd: g.racaoLinhasIncentivoQtd != null ? String(g.racaoLinhasIncentivoQtd) : '',
+  };
+}
+
+
 function novoGalpaoVazio(): GalpaoFormData {
   return {
     id: uid(),
@@ -53,18 +83,31 @@ const ASPECTOS = ['Excelente', 'Muito bom', 'Regular', 'Ruim'];
 interface NovoLoteFormProps {
   onSave: (lote: Lote) => void;
   onCancel: () => void;
+  loteInicial?: Lote;
 }
 
-export function NovoLoteForm({ onSave, onCancel }: NovoLoteFormProps) {
-  const [numero, setNumero] = useState('');
-  const [linhagem, setLinhagem] = useState(LINHAGENS[0]);
-  const [sexagem, setSexagem] = useState<'misto' | 'macho' | 'femea'>('misto');
-  const [dataAlojamento, setDataAlojamento] = useState<Date>(new Date());
-  const [horaCarregamento, setHoraCarregamento] = useState<Date | null>(null);
-  const [numPessoasDescarregamento, setNumPessoasDescarregamento] = useState('');
-  const [tecnico, setTecnico] = useState('');
-  const [nGranja, setNGranja] = useState('');
-  const [galpoes, setGalpoes] = useState<GalpaoFormData[]>([novoGalpaoVazio()]);
+export function NovoLoteForm({ onSave, onCancel, loteInicial }: NovoLoteFormProps) {
+  const editando = !!loteInicial;
+
+  const [numero, setNumero] = useState(loteInicial?.numero ?? '');
+  const [linhagem, setLinhagem] = useState(loteInicial?.linhagem ?? LINHAGENS[0]);
+  const [sexagem, setSexagem] = useState<'misto' | 'macho' | 'femea'>(
+    (loteInicial?.sexagem as any) ?? 'misto'
+  );
+  const [dataAlojamento, setDataAlojamento] = useState<Date>(
+    loteInicial?.dataAlojamento ? new Date(loteInicial.dataAlojamento) : new Date()
+  );
+  const [horaCarregamento, setHoraCarregamento] = useState<Date | null>(
+    hhmmParaDate(loteInicial?.horaCarregamento ?? null)
+  );
+  const [numPessoasDescarregamento, setNumPessoasDescarregamento] = useState(
+    loteInicial?.numPessoasDescarregamento != null ? String(loteInicial.numPessoasDescarregamento) : ''
+  );
+  const [tecnico, setTecnico] = useState(loteInicial?.tecnico ?? '');
+  const [nGranja, setNGranja] = useState((loteInicial as any)?.nGranja ?? '');
+  const [galpoes, setGalpoes] = useState<GalpaoFormData[]>(
+    loteInicial?.galpoes?.length ? loteInicial.galpoes.map(galpaoParaFormData) : [novoGalpaoVazio()]
+  );
   const [erro, setErro] = useState('');
 
   const atualizarGalpao = (id: string, campo: keyof GalpaoFormData, valor: any) =>
@@ -80,68 +123,84 @@ export function NovoLoteForm({ onSave, onCancel }: NovoLoteFormProps) {
     d ? d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : null;
 
   const salvar = () => {
-    if (!numero.trim()) return setErro('Informe o número do lote.');
-    if (!nGranja.trim()) return setErro('Informe o número da granja.');
-    if (galpoes.some((g) => !g.nome.trim())) return setErro('Informe o nome de todos os galpões.');
-    if (galpoes.some((g) => !g.quantidadeAlojada || Number(g.quantidadeAlojada) <= 0))
-      return setErro('Informe a quantidade alojada em cada galpão.');
-    if (galpoes.some((g) => !g.aspecto)) return setErro('Informe o aspecto de cada galpão.');
+  if (!numero.trim()) return setErro('Informe o número do lote.');
+  if (!nGranja.trim()) return setErro('Informe o número da granja.');
+  if (galpoes.some((g) => !g.nome.trim())) return setErro('Informe o nome de todos os galpões.');
+  if (galpoes.some((g) => !g.quantidadeAlojada || Number(g.quantidadeAlojada) <= 0))
+    return setErro('Informe a quantidade alojada em cada galpão.');
+  if (galpoes.some((g) => !g.aspecto)) return setErro('Informe o aspecto de cada galpão.');
 
-    setErro('');
+  setErro('');
 
-    const lote: Lote = {
-      id: uid(),
-      numero: numero.trim(),
-      linhagem,
-      sexagem,
-      dataAlojamento: toISO(dataAlojamento),
-      horaCarregamento: toHHMM(horaCarregamento),
-      numPessoasDescarregamento:
-        numPessoasDescarregamento === '' ? null : Number(numPessoasDescarregamento),
-      tecnico: tecnico.trim(),
-      nGranja: nGranja.trim(),
-      galpoes: galpoes.map<Galpao>((g) => ({
-        id: g.id,
-        nome: g.nome.trim(),
-        quantidadeAlojada: Number(g.quantidadeAlojada),
-        pesoMedioAlojadoG: g.pesoMedioAlojadoG === '' ? null : Number(g.pesoMedioAlojadoG),
-        temperaturaAviario: g.temperaturaAviario === '' ? null : Number(g.temperaturaAviario),
-        pintosMortos: g.pintosMortos === '' ? null : Number(g.pintosMortos),
-        horaCarregamento: toHHMM(g.horaCarregamento),
-        horaChegada: toHHMM(g.horaChegada),
-        horaDescarregamento: toHHMM(g.horaDescarregamento),
-        aspecto: g.aspecto || null,
-        racaoComedouro: g.racaoComedouro || null,
-        racaoLinhasIncentivo: g.racaoLinhasIncentivo || null,
-        racaoLinhasIncentivoQtd:
-          g.racaoLinhasIncentivoQtd === '' ? null : Number(g.racaoLinhasIncentivoQtd),
-        aguaBebedouro: g.aguaBebedouro || null,
-        aquecedorLigado: g.aquecedorLigado || null,
-      })),
-      status: 'ativo',
-      registros: [],
-      racoes: [],
-      pesagens: [],
-      aguas: [],
-      mortalidades: [],
-      temperaturas: [],
-      avaliacoesTecnicas: [],
-      horaLeituraAgua: null,
-      retiradaSilo: [],
-      retiradaLinha: [],
-      saidaAves: [],
-      embarques: [],
-      sobrasAves: [],
-      medicamentosAbate: [],
-      observacaoAbate: '',
-      encerramento: null,
-      estoquesRacao: [],
-      produtosQuimicos: [],
-      medicamentosTerapeuticos: [],
-    };
-
-    onSave(lote);
+  const camposEditados = {
+    numero: numero.trim(),
+    linhagem,
+    sexagem,
+    dataAlojamento: toISO(dataAlojamento),
+    horaCarregamento: toHHMM(horaCarregamento),
+    numPessoasDescarregamento:
+      numPessoasDescarregamento === '' ? null : Number(numPessoasDescarregamento),
+    tecnico: tecnico.trim(),
+    nGranja: nGranja.trim(),
+    galpoes: galpoes.map<Galpao>((g) => ({
+      id: g.id,
+      nome: g.nome.trim(),
+      quantidadeAlojada: Number(g.quantidadeAlojada),
+      pesoMedioAlojadoG: g.pesoMedioAlojadoG === '' ? null : Number(g.pesoMedioAlojadoG),
+      temperaturaAviario: g.temperaturaAviario === '' ? null : Number(g.temperaturaAviario),
+      pintosMortos: g.pintosMortos === '' ? null : Number(g.pintosMortos),
+      horaCarregamento: toHHMM(g.horaCarregamento),
+      horaChegada: toHHMM(g.horaChegada),
+      horaDescarregamento: toHHMM(g.horaDescarregamento),
+      aspecto: g.aspecto || null,
+      racaoComedouro: g.racaoComedouro || null,
+      racaoLinhasIncentivo: g.racaoLinhasIncentivo || null,
+      racaoLinhasIncentivoQtd:
+        g.racaoLinhasIncentivoQtd === '' ? null : Number(g.racaoLinhasIncentivoQtd),
+      aguaBebedouro: g.aguaBebedouro || null,
+      aquecedorLigado: g.aquecedorLigado || null,
+    })),
   };
+
+  if (editando && loteInicial) {
+    // 👇 mescla com o lote original, preservando histórico e metadados
+    const loteAtualizado: Lote = {
+      ...loteInicial,
+      ...camposEditados,
+    };
+    onSave(loteAtualizado);
+    return;
+  }
+
+  // fluxo de criação (igual ao original)
+  const lote: Lote = {
+    id: uid(),
+    ...camposEditados,
+    status: 'ativo',
+    registros: [],
+    racoes: [],
+    pesagens: [],
+    aguas: [],
+    mortalidades: [],
+    temperaturas: [],
+    avaliacoesTecnicas: [],
+    horaLeituraAgua: null,
+    retiradaSilo: [],
+    retiradaLinha: [],
+    saidaAves: [],
+    embarques: [],
+    sobrasAves: [],
+    medicamentosAbate: [],
+    observacaoAbate: '',
+    encerramento: null,
+    estoquesRacao: [],
+    produtosQuimicos: [],
+    medicamentosTerapeuticos: [],
+  };
+
+  onSave(lote);
+};
+
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
@@ -353,7 +412,7 @@ export function NovoLoteForm({ onSave, onCancel }: NovoLoteFormProps) {
         </TouchableOpacity>
         <TouchableOpacity style={styles.saveBtn} onPress={salvar}>
           <Check size={16} color="#fff" />
-          <Text style={styles.saveText}>Criar lote</Text>
+          <Text style={styles.saveText}>{editando ? 'Salvar alterações' : 'Criar lote'}</Text>
         </TouchableOpacity>
       </View>
     </ScrollView>

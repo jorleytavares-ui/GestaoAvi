@@ -5,11 +5,12 @@ export type AuthStackParamList = {
 
 export type RootStackParamList = {
   Home: undefined;
-  NovoLote: undefined;
+  NovoLote: { loteId?: string } | undefined;
   DetalheLote: { loteId: string };
   EncerrarForm: { loteId: string };
   Configuracoes: undefined;
   CadastroUsuario: undefined;
+  EditarEmpresa: undefined;
 };
 
 

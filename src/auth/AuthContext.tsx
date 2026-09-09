@@ -29,13 +29,23 @@ type AuthContextData = {
     cpf: string,
     senha: string
   ) => Promise<{ error?: string; opcoes?: OpcaoEmpresa[] }>;
-  signUp: (
-    senha: string,
-    nomeEmpresa: string,
-    nomeUsuario: string,
-    cpf: string,
-    emailContato?: string
-  ) => Promise<{ error?: string }>;
+  signUp: (params: {
+  senha: string;
+  nomeEmpresa: string;
+  nomeUsuario: string;
+  cpf: string;
+  emailContato?: string;
+  tipoPessoa: 'Fisica' | 'Juridica';
+  cpfCnpj: string;
+  responsavel: string;
+  telefone: string;
+  paisId: number;
+  estadoId: number;
+  cidade: string;
+  tipoEmpresa: string;
+  codigoIntegracao: string | null;
+}) => Promise<{ error?: string }>;
+
   signOut: () => Promise<void>;
   atualizarSenhaPropria: (novaSenha: string) => Promise<{ error?: string }>;
 };
@@ -332,68 +342,94 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }
 
-  async function signUp(
-    senha: string,
-    nomeEmpresa: string,
-    nomeUsuario: string,
-    cpf: string,
-    emailContato?: string
-  ) {
-    const cpfLimpo = cpf.replace(/\D/g, '');
-    const empresaId = Crypto.randomUUID();
-    const emailSintetico = `${cpfLimpo}-${empresaId}@gestaoavi.com`;
+async function signUp(params: {
+  senha: string;
+  nomeEmpresa: string;
+  nomeUsuario: string;
+  cpf: string;
+  emailContato?: string;
+  tipoPessoa: 'Fisica' | 'Juridica';
+  cpfCnpj: string;
+  responsavel: string;
+  telefone: string;
+  paisId: number;
+  estadoId: number;
+  cidade: string;
+  tipoEmpresa: string;
+  codigoIntegracao: string | null;
+}) {
+  const cpfLimpo = params.cpf.replace(/\D/g, '');
+  const empresaId = Crypto.randomUUID();
+  const emailSintetico = `${cpfLimpo}-${empresaId}@gestaoavi.com`;
 
-    const { data, error } = await supabase.functions.invoke('cadastrar-empresa', {
-      body: { empresaId, nomeEmpresa, nomeUsuario, cpf: cpfLimpo, senha, emailContato },
-    });
-
-    if (error) return { error: 'Erro ao cadastrar. Verifique sua conexão.' };
-    if (data?.error) return { error: data.error };
-
-    const { data: loginData, error: loginError } = await supabase.auth.signInWithPassword({
-      email: emailSintetico,
-      password: senha,
-    });
-
-    if (loginError || !loginData.session) {
-      return { error: 'Empresa criada, mas houve erro ao iniciar sessão. Tente fazer login.' };
-    }
-
-    const userId = loginData.user!.id;
-
-    await salvarCredencialLocal({
-      userId,
-      email: emailSintetico,
-      cpf: cpfLimpo,
-      senha,
-      accessToken: loginData.session.access_token,
-      refreshToken: loginData.session.refresh_token,
+  const { data, error } = await supabase.functions.invoke('cadastrar-empresa', {
+    body: {
       empresaId,
-      ownerId: userId,
-    });
+      nomeEmpresa: params.nomeEmpresa,
+      nomeUsuario: params.nomeUsuario,
+      cpf: cpfLimpo,
+      senha: params.senha,
+      emailContato: params.emailContato,
+      tipoPessoa: params.tipoPessoa,
+      cpfCnpj: params.cpfCnpj.replace(/\D/g, ''),
+      responsavel: params.responsavel,
+      telefone: params.telefone,
+      paisId: params.paisId,
+      estadoId: params.estadoId,
+      cidade: params.cidade,
+      tipoEmpresa: params.tipoEmpresa,
+      codigoIntegracao: params.codigoIntegracao,
+    },
+  });
 
-    await salvarPerfilCache({
-      id: userId,
-      nome: nomeUsuario,
-      empresaId: empresaId ?? '',
-      papelId: PAPEL_ID.ADMIN,
-      ownerId: userId,
-      precisaRedefinirSenha: false, // usuário recém-criado não precisa redefinir
-    });
+  if (error) return { error: 'Erro ao cadastrar. Verifique sua conexão.' };
+  if (data?.error) return { error: data.error };
 
-    setSession(loginData.session);
-    setOffline(false);
-    setPrecisaRedefinirSenha(false);
+  const { data: loginData, error: loginError } = await supabase.auth.signInWithPassword({
+    email: emailSintetico,
+    password: params.senha,
+  });
 
-    try {
-      await baixarLotesDoServidor(empresaId);
-      await baixarFaixaConforto(empresaId);
-    } catch (e) {
-      console.log('Pull inicial de lotes falhou:', e);
-    }
-
-    return {};
+  if (loginError || !loginData.session) {
+    return { error: 'Empresa criada, mas houve erro ao iniciar sessão. Tente fazer login.' };
   }
+
+  const userId = loginData.user!.id;
+
+  await salvarCredencialLocal({
+    userId,
+    email: emailSintetico,
+    cpf: cpfLimpo,
+    senha: params.senha,
+    accessToken: loginData.session.access_token,
+    refreshToken: loginData.session.refresh_token,
+    empresaId,
+    ownerId: userId,
+  });
+
+  await salvarPerfilCache({
+    id: userId,
+    nome: params.nomeUsuario,
+    empresaId,
+    papelId: PAPEL_ID.ADMIN,
+    ownerId: userId,
+    precisaRedefinirSenha: false,
+  });
+
+  setSession(loginData.session);
+  setOffline(false);
+  setPrecisaRedefinirSenha(false);
+
+  try {
+    await baixarLotesDoServidor(empresaId);
+    await baixarFaixaConforto(empresaId);
+  } catch (e) {
+    console.log('Pull inicial de lotes falhou:', e);
+  }
+
+  return {};
+}
+
 
   async function atualizarSenhaPropria(novaSenha: string) {
     if (novaSenha.length < 6) {

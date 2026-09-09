@@ -19,16 +19,46 @@ serve(async (req) => {
   }
 
   try {
-    const { empresaId, nomeEmpresa, nomeUsuario, cpf, senha, emailContato } = await req.json();
+    const {
+      empresaId,
+      nomeEmpresa,
+      nomeUsuario,
+      cpf,
+      senha,
+      emailContato,
+      tipoPessoa,
+      cpfCnpj,
+      responsavel,
+      telefone,
+      paisId,
+      estadoId,
+      cidade,
+      tipoEmpresa,
+      codigoIntegracao,
+    } = await req.json();
 
-    if (!empresaId || !nomeEmpresa || !nomeUsuario || !cpf || !senha) {
+    const camposObrigatorios = [
+      empresaId, nomeEmpresa, nomeUsuario, cpf, senha,
+      tipoPessoa, cpfCnpj, responsavel, telefone,
+      paisId, estadoId, cidade, tipoEmpresa,
+    ];
+
+    if (camposObrigatorios.some((c) => c === undefined || c === null || c === '')) {
       return new Response(
-        JSON.stringify({ error: 'Campos obrigatórios: empresaId, nomeEmpresa, nomeUsuario, cpf, senha' }),
+        JSON.stringify({ error: 'Campos obrigatórios faltando.' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    if (tipoEmpresa === 'Integrado' && !codigoIntegracao) {
+      return new Response(
+        JSON.stringify({ error: 'Selecione a empresa de Integração vinculada.' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
     const cpfLimpo = cpf.replace(/\D/g, '');
+    const cpfCnpjLimpo = cpfCnpj.replace(/\D/g, '');
     const emailSintetico = `${cpfLimpo}-${empresaId}@gestaoavi.com`;
 
     const { data: empresaExistente } = await supabaseAdmin
@@ -48,10 +78,7 @@ serve(async (req) => {
       email: emailSintetico,
       password: senha,
       email_confirm: true,
-      user_metadata: {
-        nome: nomeUsuario,
-        cpf: cpfLimpo,
-      },
+      user_metadata: { nome: nomeUsuario, cpf: cpfLimpo },
     });
 
     if (authError || !userData?.user) {
@@ -63,9 +90,21 @@ serve(async (req) => {
 
     const userId = userData.user.id;
 
-    const { error: empresaError } = await supabaseAdmin
-      .from('empresas')
-      .insert({ id: empresaId, nome: nomeEmpresa, owner_id: userId });
+    const { error: empresaError } = await supabaseAdmin.from('empresas').insert({
+      id: empresaId,
+      nome: nomeEmpresa,
+      owner_id: userId,
+      tipopessoa: tipoPessoa,
+      cpf_cnpj: cpfCnpjLimpo,
+      responsavel,
+      telefone,
+      email: emailContato?.trim() || null,
+      pais_id: paisId,
+      estado_id: estadoId,
+      cidade,
+      tipo: tipoEmpresa,
+      codigo_integracao: tipoEmpresa === 'Integrado' ? codigoIntegracao : null,
+    });
 
     if (empresaError) {
       await supabaseAdmin.auth.admin.deleteUser(userId);
@@ -124,3 +163,4 @@ serve(async (req) => {
     });
   }
 });
+

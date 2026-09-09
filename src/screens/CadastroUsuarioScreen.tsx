@@ -30,6 +30,7 @@ const TODAS_OPCOES_PAPEL = [
   { value: String(PAPEL_ID.GERENTE), label: 'Gerente avícola' },
   { value: String(PAPEL_ID.VETERINARIO), label: 'Médico Veterinário' },
   { value: String(PAPEL_ID.GRANJEIRO), label: 'Granjeiro' },
+  { value: String(PAPEL_ID.GESTOR), label: 'Gestor' },
 ];
 
 function formatarCpf(valor: string) {
@@ -91,9 +92,14 @@ export function CadastroUsuarioScreen({ navigation }: any) {
   const [modalRedefinirVisivel, setModalRedefinirVisivel] = useState(false);
 
   const ehAdmin = perfil?.papelId === PAPEL_ID.ADMIN;
-  const OPCOES_PAPEL = ehAdmin
-    ? TODAS_OPCOES_PAPEL
-    : TODAS_OPCOES_PAPEL.filter((op) => op.value !== String(PAPEL_ID.ADMIN));
+  const ehEmpresaIntegracao = perfil?.empresaTipo === 'Integracao';
+
+
+  const OPCOES_PAPEL = TODAS_OPCOES_PAPEL.filter((op) => {
+  if (op.value === String(PAPEL_ID.ADMIN) && !ehAdmin) return false;
+  if (op.value === String(PAPEL_ID.GESTOR) && !ehEmpresaIntegracao) return false;
+  return true;
+});
 
   useEffect(() => {
     if (!perfil?.empresa_id) return;

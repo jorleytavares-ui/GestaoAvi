@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Alert, TouchableOpacity, Text, View, StyleSheet, ScrollView } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { Weight, TrendingUp, Bird, Wheat, Calendar } from 'lucide-react-native';
+import { Weight, TrendingUp, Bird, Wheat, Calendar, Pencil } from 'lucide-react-native';
+
 import NetInfo from '@react-native-community/netinfo';
 
 import { AppHeader } from '../components/AppHeader';
@@ -121,23 +122,39 @@ export function DetalheLoteScreen({ route, navigation }: Props) {
         {lote && (
           <View style={styles.cardTopo}>
             <View style={styles.linha}>
-              <Text style={styles.nomeLote}>{`Lote ${lote.numero}`}</Text>
-              <View
-                style={[
-                  styles.badgeStatus,
-                  { borderColor: lote.status === 'encerrado' ? COLORS.inkSoft : COLORS.primary },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.badgeStatusText,
-                    { color: lote.status === 'encerrado' ? COLORS.inkSoft : COLORS.primary },
-                  ]}
-                >
-                  {lote.status === 'encerrado' ? 'ENCERRADO' : 'ATIVO'}
-                </Text>
-              </View>
-            </View>
+  <Text style={styles.nomeLote}>{`Lote ${lote.numero}`}</Text>
+
+  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+    {user && lote.status !== 'encerrado' && (
+  !lote.ownerId || lote.ownerId === user.id || lote.liberado
+) && (
+  <TouchableOpacity
+    onPress={() => navigation.navigate('NovoLote', { loteId: lote.id })}
+    style={styles.botaoEditar}
+  >
+    <Pencil size={16} color={COLORS.primary} />
+  </TouchableOpacity>
+)}
+
+
+    <View
+      style={[
+        styles.badgeStatus,
+        { borderColor: lote.status === 'encerrado' ? COLORS.inkSoft : COLORS.primary },
+      ]}
+    >
+      <Text
+        style={[
+          styles.badgeStatusText,
+          { color: lote.status === 'encerrado' ? COLORS.inkSoft : COLORS.primary },
+        ]}
+      >
+        {lote.status === 'encerrado' ? 'ENCERRADO' : 'ATIVO'}
+      </Text>
+    </View>
+  </View>
+</View>
+
 
             <Text style={styles.subInfo}>
               {[lote.linhagem, (lote as any).sexagem].filter(Boolean).join(' · ')}
@@ -361,6 +378,13 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
     marginBottom: 12,
   },
+  botaoEditar: {
+  padding: 4,
+  borderRadius: 6,
+  borderWidth: 1,
+  borderColor: COLORS.line,
+},
+
   aviso: {
     marginHorizontal: 16,
     marginBottom: 12,

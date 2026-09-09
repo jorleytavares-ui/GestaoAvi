@@ -11,6 +11,7 @@ type Perfil = {
   nome: string;
   empresa_id: string;
   papelId: PapelId;
+  empresaTipo?: string;
 };
 
 export function usePerfil() {
@@ -41,6 +42,7 @@ export function usePerfil() {
           nome: cache.nome,
           empresa_id: cache.empresaId,
           papelId: cache.papelId,
+          empresaTipo: cache.empresaTipo,
         });
         setOwnerId(cache.ownerId);
       } else {
@@ -66,6 +68,8 @@ export function usePerfil() {
           nome: cache.nome,
           empresa_id: cache.empresaId,
           papelId: cache.papelId,
+          empresaTipo: cache.empresaTipo,
+          
         });
         setOwnerId(cache.ownerId);
       } else {
@@ -76,21 +80,24 @@ export function usePerfil() {
       return;
     }
 
-    setPerfil({
-      id: data.id,
-      nome: data.nome,
-      empresa_id: data.empresa_id,
-      papelId: data.papel_id,
-    });
+    
 
     const { data: empresa } = await supabase
       .from('empresas')
-      .select('owner_id')
+      .select('owner_id, tipo') 
       .eq('id', data.empresa_id)
       .maybeSingle();
 
     const ownerIdResolvido = empresa?.owner_id ?? user.id;
     setOwnerId(ownerIdResolvido);
+
+    setPerfil({
+      id: data.id,
+      nome: data.nome,
+      empresa_id: data.empresa_id,
+      papelId: data.papel_id,
+      empresaTipo: empresa?.tipo
+    });
 
     // Atualiza o cache local com o dado fresco do servidor
     await salvarPerfilCache({
@@ -99,6 +106,7 @@ export function usePerfil() {
       empresaId: data.empresa_id,
       papelId: data.papel_id,
       ownerId: ownerIdResolvido,
+      empresaTipo: empresa?.tipo,
       precisaRedefinirSenha: !!data.precisa_redefinir_senha,
     });
 

@@ -7,7 +7,7 @@ import { useAuth } from '../auth/AuthContext';
 import { usePerfil } from '../hooks/usePerfil';
 import { sincronizarTudo } from '../storage/sync';
 import { getLotes } from '../storage/storage';
-import { podeCadastrarUsuario } from '../constants/papeis';
+import { podeCadastrarUsuario, podeEditarEmpresa } from '../constants/papeis';
 
 export function HeaderMenu() {
   const [visivel, setVisivel] = useState(false);
@@ -114,6 +114,23 @@ export function HeaderMenu() {
     </TouchableOpacity>
   </>
 )}
+
+{podeEditarEmpresa(perfil?.papelId) && (
+  <>
+    <View style={styles.separador} />
+    <TouchableOpacity
+      style={styles.item}
+      onPress={() => {
+        setVisivel(false);
+        navigation.navigate('EditarEmpresa');
+      }}
+    >
+      <Ionicons name="business-outline" size={20} color="#333" />
+      <Text style={styles.itemTexto}>Editar Empresa</Text>
+    </TouchableOpacity>
+  </>
+)}
+
 
             <View style={styles.separador} />
 

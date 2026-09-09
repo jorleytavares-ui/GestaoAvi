@@ -16,7 +16,8 @@ import { LicencaBloqueadaScreen } from '../screens/LicencaBloqueadaScreen';
 import type { RootStackParamList, AuthStackParamList } from './types';
 import { COLORS } from '../theme/colors';
 import { CadastroUsuarioScreen } from '../screens/CadastroUsuarioScreen';
-import { TrocarSenhaObrigatoria } from '../screens/TrocarSenhaObrigatoria'; // ✅ novo
+import { TrocarSenhaObrigatoria } from '../screens/TrocarSenhaObrigatoria'; 
+import { EditarEmpresaScreen } from '../screens/EditarEmpresaScreen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const AuthStack = createNativeStackNavigator<AuthStackParamList>();
@@ -37,6 +38,11 @@ function AppNavigator() {
       <Stack.Screen name="NovoLote" component={NovoLoteScreen} />
       <Stack.Screen name="DetalheLote" component={DetalheLoteScreen} />
       <Stack.Screen name="EncerrarForm" component={EncerrarForm} options={{ title: 'Encerrar lote' }} />
+      <Stack.Screen
+  name="EditarEmpresa"
+  component={EditarEmpresaScreen}
+  options={{ headerShown: false }}
+/>
       <Stack.Screen
         name="Configuracoes"
         component={ConfiguracoesScreen}
