@@ -12,6 +12,7 @@ import {
 } from './storage';
 
 import { Lote } from '../utils/calculations';
+import { listarEmpresasVinculadas } from '../services/empresas';
 
 let syncEmAndamento = false;
 const SYNC_ENABLED = true; // ✅ reativado
@@ -42,7 +43,6 @@ export async function marcarComoPendente(loteId: string): Promise<void> {
 }
 
 // ---------- PUSH ----------
-// ---------- PUSH ----------
 export async function enviarLotesPendentes(
   empresaId: string,
   ownerId: string
@@ -63,20 +63,22 @@ export async function enviarLotesPendentes(
 
     for (const lote of pendentes) {
       try {
+        // 👇 Se o lote tem empresaId próprio (foi criado por uma empresa
+        // "Integracao" para uma empresa "Integrado" vinculada), usamos esse
+        // valor. Caso contrário, usamos o empresaId do usuário logado.
+        const empresaIdDestino = lote.empresaId ?? empresaId;
+
         const payload: Record<string, any> = {
           id: lote.id,
-          empresa_id: empresaId,
+          empresa_id: empresaIdDestino,
           numero: lote.numero,
           linhagem: lote.linhagem,
           status: lote.status,
           owner_id: lote.ownerId ?? ownerId,
+          liberado: lote.liberado ?? false,
           data: lote,
         };
 
-        // ✅ Verifica se o lote já existe no servidor.
-        // Isso evita usar upsert (que sempre executa como INSERT ... ON CONFLICT
-        // e nunca dispara triggers BEFORE UPDATE, além de recontar na licença
-        // a cada edição de aba do lote).
         const { data: existente, error: checkError } = await supabase
           .from('lotes')
           .select('id')
@@ -97,16 +99,12 @@ export async function enviarLotesPendentes(
         let error;
 
         if (existente) {
-          // Lote já existe → UPDATE real, dispara trigger de transferência
-          // e NÃO conta como novo lote na licença.
           const { error: updateError } = await supabase
             .from('lotes')
             .update(payload)
             .eq('id', lote.id);
           error = updateError;
         } else {
-          // Lote novo → INSERT, dispara validação/contagem de licença
-          // normalmente (é uma criação real).
           const { error: insertError } = await supabase
             .from('lotes')
             .insert(payload);
@@ -162,6 +160,7 @@ export async function enviarLotesPendentes(
 }
 
 
+
 // ---------- PULL ----------
 export async function baixarLotesDoServidor(empresaId: string): Promise<ResultadoSync> {
   if (!SYNC_ENABLED) return { sucesso: 0, falhas: 0 };
@@ -172,10 +171,14 @@ export async function baixarLotesDoServidor(empresaId: string): Promise<Resultad
   try {
     const userId = await getUsuarioAtualId();
 
+    // Busca empresas "Integrado" vinculadas a esta (se ela for "Integracao")
+    const { data: vinculadas } = await listarEmpresasVinculadas(empresaId);
+    const empresaIds = [empresaId, ...(vinculadas?.map((e) => e.id) ?? [])];
+
     const { data: remotos, error } = await supabase
       .from('lotes')
       .select('id, owner_id, liberado, liberado_em, liberado_por, data')
-      .eq('empresa_id', empresaId);
+      .in('empresa_id', empresaIds);
 
     if (error || !remotos) {
       falhas++;

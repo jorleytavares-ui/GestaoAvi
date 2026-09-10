@@ -1,6 +1,7 @@
 // src/services/lotes.ts
 import { supabase } from '../lib/supabase';
 import NetInfo from '@react-native-community/netinfo';
+import { getLoteById, upsertLote } from '../storage/storage';
 
 export async function assumirLote(loteId: string): Promise<void> {
   const netState = await NetInfo.fetch();
@@ -19,37 +20,52 @@ export async function assumirLote(loteId: string): Promise<void> {
     .single();
 
   if (fetchError || !lote) throw new Error('Lote não encontrado.');
+  if (!lote.liberado) throw new Error('Este lote não está liberado para transferência.');
+  if (lote.owner_id === userId) throw new Error('Você já é o proprietário deste lote.');
 
-  if (!lote.liberado) {
-    throw new Error('Este lote não está liberado para transferência.');
-  }
+// assumirLote — ao assumir, limpa os campos de liberação
+const { data: updated, error: updateError } = await supabase
+  .from('lotes')
+  .update({
+    owner_id: userId,
+    liberado: false,
+    liberado_em: null,
+    liberado_por: null,
+  })
+  .eq('id', loteId)
+  .eq('liberado', true)
+  .select('id');
 
-  if (lote.owner_id === userId) {
-    throw new Error('Você já é o proprietário deste lote.');
-  }
 
-  // Atualiza owner + fecha liberação (trigger cuida da auditoria)
-  const { data: updated, error: updateError } = await supabase
-    .from('lotes')
-    .update({ owner_id: userId })
-    .eq('id', loteId)
-    .eq('liberado', true)
-    .select('id'); // <- necessário para saber quantas linhas foram afetadas
+
 
   if (updateError) throw updateError;
-
-  // Se nenhuma linha foi atualizada, alguém já assumiu o lote antes de você
   if (!updated || updated.length === 0) {
     throw new Error('Este lote já foi assumido por outro usuário. Tente novamente.');
   }
+
+  // 👇 Atualiza o cache local do usuário atual
+  const { data: perfil } = await supabase
+    .from('perfis')
+    .select('nome')
+    .eq('id', userId)
+    .single();
+
+  const loteLocal = await getLoteById(userId, loteId);
+  if (loteLocal) {
+    await upsertLote(userId, {
+  ...loteLocal,
+  ownerId: userId,
+  ownerNome: perfil?.nome ?? loteLocal.ownerNome ?? null,
+  liberado: false,
+  liberadoEm: null,
+  liberadoPor: null,
+  syncStatus: 'sincronizado',
+} as any);
+
+  }
 }
 
-
-/**
- * Marca um lote como liberado para transferência.
- * Só o proprietário atual pode liberar. Exige internet
- * (a mudança de dono precisa ser validada no servidor).
- */
 export async function liberarLote(loteId: string): Promise<void> {
   const netState = await NetInfo.fetch();
   if (!netState.isConnected) {
@@ -67,23 +83,36 @@ export async function liberarLote(loteId: string): Promise<void> {
     .single();
 
   if (fetchError || !lote) throw new Error('Lote não encontrado.');
+  if (lote.owner_id !== userId) throw new Error('Apenas o proprietário atual pode liberar este lote.');
+  if (lote.liberado) throw new Error('Este lote já está liberado.');
 
-  if (lote.owner_id !== userId) {
-    throw new Error('Apenas o proprietário atual pode liberar este lote.');
-  }
-
-  if (lote.liberado) {
-    throw new Error('Este lote já está liberado.');
-  }
+  const agora = new Date().toISOString(); // 👈 reaproveita o mesmo timestamp
 
   const { error: updateError } = await supabase
     .from('lotes')
-    .update({ liberado: true })
+    .update({
+      liberado: true,
+      liberado_em: agora,
+      liberado_por: userId,
+    })
     .eq('id', loteId)
-    .eq('owner_id', userId); // garante que ele ainda é o dono no momento da atualização
+    .eq('owner_id', userId);
 
   if (updateError) throw updateError;
+
+  // 👇 Atualiza o cache local — agora completo
+  const loteLocal = await getLoteById(userId, loteId);
+  if (loteLocal) {
+    await upsertLote(userId, {
+      ...loteLocal,
+      liberado: true,
+      liberadoEm: agora,        // 👈 adicionado
+      liberadoPor: userId,      // 👈 adicionado
+      syncStatus: 'sincronizado',
+    } as any);
+  }
 }
+
 
 export function podeEditarLote(
   lote: { owner_id: string; liberado: boolean },

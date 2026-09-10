@@ -9,17 +9,19 @@ import { COLORS } from '../theme/colors';
 import { Lote } from '../utils/calculations';
 import { upsertLote, getLoteById } from '../storage/storage';
 import { useLicenca } from '../hooks/useLicenca';
+import { listarEmpresasVinculadas, EmpresaVinculada } from '../services/empresas';
 import type { RootStackParamList } from '../navigation/types';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'NovoLote'>;
 
 export function NovoLoteScreen({ navigation, route }: Props) {
   const { podeCriarLote, motivoBloqueio, recarregar } = useLicenca();
-  const { userId } = useAuth();
+  const { userId, empresaId } = useAuth(); // 👈 assumindo que o AuthContext expõe empresaId do usuário logado
   const loteId = route.params?.loteId;
 
   const [loteExistente, setLoteExistente] = useState<Lote | null>(null);
   const [carregando, setCarregando] = useState(!!loteId);
+  const [empresasVinculadas, setEmpresasVinculadas] = useState<EmpresaVinculada[]>([]);
 
   useEffect(() => {
     if (!loteId || !userId) return;
@@ -35,38 +37,46 @@ export function NovoLoteScreen({ navigation, route }: Props) {
     })();
   }, [loteId, userId]);
 
+  // 👇 Busca as empresas vinculadas (tipo "Integrado") só quando é criação nova
+  useEffect(() => {
+    if (loteId || !empresaId) return;
+    (async () => {
+      const { data, error } = await listarEmpresasVinculadas(empresaId);
+      if (!error && data) setEmpresasVinculadas(data);
+    })();
+  }, [loteId, empresaId]);
+
   const handleSalvarLote = async (lote: Lote) => {
-  if (!userId) {
-    Alert.alert('Erro', 'Usuário não autenticado.');
-    return;
-  }
+    if (!userId) {
+      Alert.alert('Erro', 'Usuário não autenticado.');
+      return;
+    }
 
-  if (!loteId && !podeCriarLote) {
-    Alert.alert('Acesso bloqueado', motivoBloqueio ?? 'Não é possível criar lote.');
-    return;
-  }
+    if (!loteId && !podeCriarLote) {
+      Alert.alert('Acesso bloqueado', motivoBloqueio ?? 'Não é possível criar lote.');
+      return;
+    }
 
-  let loteParaSalvar = lote;
+    let loteParaSalvar = lote;
 
-  // 👇 Se o lote estava liberado para transferência e o usuário o editou,
-  // ele automaticamente se torna o novo proprietário.
-  if (loteExistente?.liberado && loteExistente.ownerId !== userId) {
-    loteParaSalvar = {
-      ...lote,
-      ownerId: userId,
-      liberado: false,
-    };
-  }
+    // Se o lote estava liberado para transferência e o usuário o editou,
+    // ele automaticamente se torna o novo proprietário.
+    if (loteExistente?.liberado && loteExistente.ownerId !== userId) {
+      loteParaSalvar = {
+        ...lote,
+        ownerId: userId,
+        liberado: false,
+      };
+    }
 
-  try {
-    await upsertLote(userId, { ...loteParaSalvar, syncStatus: 'pendente' });
-    recarregar();
-    navigation.goBack();
-  } catch (e: any) {
-    Alert.alert('Erro ao salvar lote', e?.message ?? 'Tente novamente.');
-  }
-};
-
+    try {
+      await upsertLote(userId, { ...loteParaSalvar, syncStatus: 'pendente' });
+      recarregar();
+      navigation.goBack();
+    } catch (e: any) {
+      Alert.alert('Erro ao salvar lote', e?.message ?? 'Tente novamente.');
+    }
+  };
 
   if (carregando) {
     return (
@@ -83,6 +93,7 @@ export function NovoLoteScreen({ navigation, route }: Props) {
         onSave={handleSalvarLote}
         onCancel={() => navigation.goBack()}
         loteInicial={loteExistente ?? undefined}
+        empresasVinculadas={empresasVinculadas} // 👈 novo prop
       />
     </View>
   );

@@ -24,6 +24,8 @@ type AuthContextData = {
   offline: boolean;
   carregandoSessao: boolean;
   precisaRedefinirSenha: boolean;
+  empresaId: string | null;
+  empresaTipo: string | null;
   signIn: (email: string, senha: string) => Promise<{ error?: string }>;
   signInComCpf: (
     cpf: string,
@@ -44,6 +46,7 @@ type AuthContextData = {
   cidade: string;
   tipoEmpresa: string;
   codigoIntegracao: string | null;
+  codigoParceiro: string | null; 
 }) => Promise<{ error?: string }>;
 
   signOut: () => Promise<void>;
@@ -57,6 +60,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [offline, setOffline] = useState(false);
   const [carregandoSessao, setCarregandoSessao] = useState(true);
   const [precisaRedefinirSenha, setPrecisaRedefinirSenha] = useState(false);
+  const [empresaId, setEmpresaId] = useState<string | null>(null);
+  const [empresaTipo, setEmpresaTipo] = useState<string | null>(null);
 
   async function verificarNecessidadeRedefinicao(userId: string, tempClient?: any) {
     const client = tempClient ?? supabase;
@@ -86,11 +91,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             setOffline(false);
             const perfilCache = await getPerfilCache(userData.user.id);
             setPrecisaRedefinirSenha(!!perfilCache?.precisaRedefinirSenha);
+            setEmpresaId(perfilCache?.empresaId ?? null);
+            setEmpresaTipo(perfilCache?.empresaTipo ?? null);
             await verificarNecessidadeRedefinicao(userData.user.id);
           }
         } else {
           setSession(sessionData.session);
           setOffline(true);
+          const perfilCache = await getPerfilCache(sessionData.session.user.id);
+          setPrecisaRedefinirSenha(!!perfilCache?.precisaRedefinirSenha);
+          setEmpresaId(perfilCache?.empresaId ?? null);
+          setEmpresaTipo(perfilCache?.empresaTipo ?? null);
         }
       } else {
         setSession(null);
@@ -149,7 +160,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return { error: licencaError.message };
     }
 
-    return { empresaId: empresaData.id };
+    return { empresaId: empresaData.id, empresaTipo: (empresaData as any)?.tipo ?? null };
   }
 
   async function buscarEmailPorCpf(
@@ -195,10 +206,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     if (perfilCheckError) return { error: perfilCheckError.message };
 
-    let empresaId: string | null = perfilExistente?.empresa_id ?? null;
+    let empresaIdLocal: string | null = perfilExistente?.empresa_id ?? null;
     let nome = perfilExistente?.nome ?? email.split('@')[0];
     let papelId = perfilExistente?.papel_id ?? PAPEL_ID.ADMIN;
     const cpf: string | undefined = (perfilExistente as any)?.cpf ?? undefined;
+    let empresaTipoLocal: string | null = null;
 
     if (perfilExistente) {
       setPrecisaRedefinirSenha(!!(perfilExistente as any)?.precisa_redefinir_senha);
@@ -217,20 +229,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       );
 
       if (resultado.error) return { error: resultado.error };
-      empresaId = resultado.empresaId ?? null;
+      empresaIdLocal = resultado.empresaId ?? null;
+      empresaTipoLocal = resultado.empresaTipo ?? null;
       nome = nomeUsuario;
       papelId = PAPEL_ID.ADMIN;
       setPrecisaRedefinirSenha(false);
     }
 
     let ownerId = userId;
-    if (empresaId) {
+    if (empresaIdLocal) {
+      // ✅ Busca owner_id e tipo da empresa numa única query
       const { data: empresa } = await tempClient
         .from('empresas')
-        .select('owner_id')
-        .eq('id', empresaId)
+        .select('owner_id, tipo')
+        .eq('id', empresaIdLocal)
         .maybeSingle();
       ownerId = (empresa as any)?.owner_id ?? userId;
+      empresaTipoLocal = (empresa as any)?.tipo ?? empresaTipoLocal;
     }
 
     await sincronizarRelogioServidor();
@@ -242,25 +257,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       senha,
       accessToken: data.session.access_token,
       refreshToken: data.session.refresh_token,
-      empresaId,
+      empresaId: empresaIdLocal,
       ownerId,
     });
 
     await salvarPerfilCache({
       id: userId,
       nome,
-      empresaId: empresaId ?? '',
+      empresaId: empresaIdLocal ?? '',
       papelId,
       ownerId,
+      empresaTipo: empresaTipoLocal ?? undefined,
       precisaRedefinirSenha,
     });
 
     setSession(data.session);
     setOffline(false);
+    setEmpresaId(empresaIdLocal);
+    setEmpresaTipo(empresaTipoLocal);
 
     try {
-  await baixarLotesDoServidor(empresaId ?? '');
-  await baixarFaixaConforto(empresaId ?? '');
+  await baixarLotesDoServidor(empresaIdLocal ?? '');
+  await baixarFaixaConforto(empresaIdLocal ?? '');
 } catch (e) {
   console.log('Pull inicial de lotes falhou (será tentado novamente pelo auto-sync):', e);
 }
@@ -291,6 +309,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // 👇 aplica o flag cacheado
     const perfilCache = await getPerfilCache(credencial.userId);
     setPrecisaRedefinirSenha(!!perfilCache?.precisaRedefinirSenha);
+    setEmpresaId(perfilCache?.empresaId ?? credencial.empresaId ?? null);
+    setEmpresaTipo(perfilCache?.empresaTipo ?? null);
 
     setOffline(true);
     setCarregandoSessao(false);
@@ -357,14 +377,15 @@ async function signUp(params: {
   cidade: string;
   tipoEmpresa: string;
   codigoIntegracao: string | null;
+  codigoParceiro: string | null;
 }) {
   const cpfLimpo = params.cpf.replace(/\D/g, '');
-  const empresaId = Crypto.randomUUID();
-  const emailSintetico = `${cpfLimpo}-${empresaId}@gestaoavi.com`;
+  const empresaIdNovo = Crypto.randomUUID();
+  const emailSintetico = `${cpfLimpo}-${empresaIdNovo}@gestaoavi.com`;
 
   const { data, error } = await supabase.functions.invoke('cadastrar-empresa', {
     body: {
-      empresaId,
+      empresaId: empresaIdNovo,
       nomeEmpresa: params.nomeEmpresa,
       nomeUsuario: params.nomeUsuario,
       cpf: cpfLimpo,
@@ -379,6 +400,7 @@ async function signUp(params: {
       cidade: params.cidade,
       tipoEmpresa: params.tipoEmpresa,
       codigoIntegracao: params.codigoIntegracao,
+      codigoParceiro: params.codigoParceiro,
     },
   });
 
@@ -403,26 +425,30 @@ async function signUp(params: {
     senha: params.senha,
     accessToken: loginData.session.access_token,
     refreshToken: loginData.session.refresh_token,
-    empresaId,
+    empresaId: empresaIdNovo,
     ownerId: userId,
   });
 
+  // ✅ Já sabemos o tipo da empresa (veio nos parâmetros), não precisa reconsultar
   await salvarPerfilCache({
     id: userId,
     nome: params.nomeUsuario,
-    empresaId,
+    empresaId: empresaIdNovo,
     papelId: PAPEL_ID.ADMIN,
     ownerId: userId,
+    empresaTipo: params.tipoEmpresa,
     precisaRedefinirSenha: false,
   });
 
   setSession(loginData.session);
   setOffline(false);
   setPrecisaRedefinirSenha(false);
+  setEmpresaId(empresaIdNovo);
+  setEmpresaTipo(params.tipoEmpresa);
 
   try {
-    await baixarLotesDoServidor(empresaId);
-    await baixarFaixaConforto(empresaId);
+    await baixarLotesDoServidor(empresaIdNovo);
+    await baixarFaixaConforto(empresaIdNovo);
   } catch (e) {
     console.log('Pull inicial de lotes falhou:', e);
   }
@@ -453,6 +479,8 @@ async function signUp(params: {
     setSession(null);
     setOffline(false);
     setPrecisaRedefinirSenha(false);
+    setEmpresaId(null);
+    setEmpresaTipo(null);
   }
 
   return (
@@ -464,6 +492,8 @@ async function signUp(params: {
         offline,
         carregandoSessao,
         precisaRedefinirSenha,
+        empresaId,
+        empresaTipo,
         signIn,
         signInComCpf,
         signUp,

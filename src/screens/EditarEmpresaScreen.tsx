@@ -202,6 +202,8 @@ export function EditarEmpresaScreen() {
   const [tipoEmpresa, setTipoEmpresa] = useState('');
   const [empresasIntegracao, setEmpresasIntegracao] = useState<EmpresaIntegracao[]>([]);
   const [codigoIntegracao, setCodigoIntegracao] = useState('');
+  const [codigoParceiro, setCodigoParceiro] = useState('');
+
 
   useEffect(() => {
     async function carregar() {
@@ -210,8 +212,9 @@ export function EditarEmpresaScreen() {
       const { data: empresa, error } = await supabase
         .from('empresas')
         .select(
-          'nome, tipopessoa, cpf_cnpj, responsavel, telefone, email, pais_id, estado_id, cidade, tipo, codigo_integracao'
-        )
+  'nome, tipopessoa, cpf_cnpj, responsavel, telefone, email, pais_id, estado_id, cidade, tipo, codigo_integracao, codigo_parceiro'
+)
+
         .eq('id', perfil.empresa_id)
         .maybeSingle();
 
@@ -232,6 +235,8 @@ export function EditarEmpresaScreen() {
       setCidade(empresa.cidade ?? '');
       setTipoEmpresa(empresa.tipo ?? '');
       setCodigoIntegracao(empresa.codigo_integracao ?? '');
+      setCodigoParceiro(empresa.codigo_parceiro ?? '');
+
 
       const { data: paisesData } = await supabase.from('paises').select('id, nome, sigla').order('nome');
       if (paisesData) setPaises(paisesData);
@@ -325,6 +330,10 @@ export function EditarEmpresaScreen() {
     if (tipoEmpresa === 'Integrado' && !codigoIntegracao) {
       return 'Selecione a empresa de Integração vinculada.';
     }
+    if (tipoEmpresa === 'Integrado' && !codigoParceiro.trim()) {
+  return 'Informe o código de parceiro.';
+}
+
     return null;
   }
 
@@ -351,6 +360,7 @@ export function EditarEmpresaScreen() {
         cidade: cidade.trim(),
         tipo: tipoEmpresa,
         codigo_integracao: tipoEmpresa === 'Integrado' ? codigoIntegracao : null,
+        codigo_parceiro: tipoEmpresa === 'Integrado' ? codigoParceiro.trim() : null,
       })
       .eq('id', perfil.empresa_id);
     setSalvando(false);
@@ -450,7 +460,16 @@ export function EditarEmpresaScreen() {
               opcoes={empresasIntegracao.map((e) => ({ value: e.id, label: e.nome }))}
               placeholder="Selecione a empresa"
             />
+            
           )}
+          {tipoEmpresa === 'Integrado' && (
+  <TextField
+    label="Código de parceiro"
+    value={codigoParceiro}
+    onChangeText={setCodigoParceiro}
+    autoCapitalize="characters"
+  />
+)}
         </View>
 
         <TouchableOpacity

@@ -229,6 +229,8 @@ export function CadastroScreen({ navigation }: any) {
   const [tipoEmpresa, setTipoEmpresa] = useState('');
   const [empresasIntegracao, setEmpresasIntegracao] = useState<EmpresaIntegracao[]>([]);
   const [codigoIntegracao, setCodigoIntegracao] = useState('');
+  const [codigoParceiro, setCodigoParceiro] = useState('');
+
 
   const [carregando, setCarregando] = useState(false);
 
@@ -333,6 +335,10 @@ export function CadastroScreen({ navigation }: any) {
     if (tipoEmpresa === 'Integrado' && !codigoIntegracao) {
       return 'Selecione a empresa de Integração vinculada.';
     }
+    if (tipoEmpresa === 'Integrado' && !codigoParceiro.trim()) {
+  return 'Informe o código de parceiro.';
+}
+
     return null;
   }
 
@@ -359,6 +365,7 @@ export function CadastroScreen({ navigation }: any) {
       cidade,
       tipoEmpresa,
       codigoIntegracao: tipoEmpresa === 'Integrado' ? codigoIntegracao : null,
+      codigoParceiro: tipoEmpresa === 'Integrado' ? codigoParceiro.trim() : null,
     });
     setCarregando(false);
 
@@ -497,14 +504,23 @@ export function CadastroScreen({ navigation }: any) {
           />
 
           {tipoEmpresa === 'Integrado' && (
-            <SimpleSelect
-              label="Empresa de Integração vinculada"
-              value={codigoIntegracao}
-              onChange={setCodigoIntegracao}
-              opcoes={empresasIntegracao.map((e) => ({ value: e.id, label: e.nome }))}
-              placeholder="Selecione a empresa"
-            />
-          )}
+  <>
+    <SimpleSelect
+      label="Empresa de Integração vinculada"
+      value={codigoIntegracao}
+      onChange={setCodigoIntegracao}
+      opcoes={empresasIntegracao.map((e) => ({ value: e.id, label: e.nome }))}
+      placeholder="Selecione a empresa"
+    />
+    <TextField
+      label="Código de parceiro"
+      value={codigoParceiro}
+      onChangeText={setCodigoParceiro}
+      autoCapitalize="characters"
+    />
+  </>
+)}
+
         </View>
 
         <TouchableOpacity

@@ -25,8 +25,6 @@ import { PromptSenhaModal } from '../components/PromptSenhaModal';
 
 const TODAS_OPCOES_PAPEL = [
   { value: String(PAPEL_ID.ADMIN), label: 'Administrador' },
-  { value: String(PAPEL_ID.INTEGRADOR), label: 'Integrador' },
-  { value: String(PAPEL_ID.INTEGRADO), label: 'Integrado (a)' },
   { value: String(PAPEL_ID.GERENTE), label: 'Gerente avícola' },
   { value: String(PAPEL_ID.VETERINARIO), label: 'Médico Veterinário' },
   { value: String(PAPEL_ID.GRANJEIRO), label: 'Granjeiro' },
@@ -178,7 +176,7 @@ export function CadastroUsuarioScreen({ navigation }: any) {
       if (error) {
         Alert.alert('Erro ao atualizar', error);
       } else {
-        Alert.alert('Sucesso', 'Funcionário atualizado com sucesso.');
+        Alert.alert('Sucesso', 'Usuário atualizado com sucesso.');
         navigation.goBack();
       }
       return;
@@ -245,7 +243,7 @@ export function CadastroUsuarioScreen({ navigation }: any) {
         {funcionarios.length > 0 && (
           <View style={{ marginBottom: 16 }}>
             <Text style={{ fontSize: 13, fontWeight: '600', color: COLORS.ink, marginBottom: 8 }}>
-              Editar funcionário existente (opcional)
+              Editar usuário existente (opcional)
             </Text>
             <SimpleSelect
               value={funcionarioSelecionadoId}
@@ -254,7 +252,7 @@ export function CadastroUsuarioScreen({ navigation }: any) {
                 { value: '', label: 'Novo cadastro' },
                 ...funcionarios.map((f) => ({ value: f.id, label: f.nome })),
               ]}
-              placeholder="Selecione um funcionário ou cadastre um novo"
+              placeholder="Selecione um usuário ou cadastre um novo"
             />
           </View>
         )}

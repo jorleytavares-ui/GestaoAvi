@@ -12,21 +12,27 @@ export function useIndicadoresLote(loteId: string) {
   const [idade, setIdade] = useState<number>(0);
 
   const recarregar = useCallback(() => {
-    if (!userId) return;
-    getLoteById(userId, loteId).then((l) => {
-      if (!l) return;
-      setLote(l);
-      setIdx(computeIndices(l));
-      setIdade(
-        daysBetween(
-          l.dataAlojamento,
-          l.status === 'encerrado' && l.encerramento ? l.encerramento.data : todayStr()
-        )
-      );
-    });
-  }, [loteId, userId]);
+  if (!userId) return Promise.resolve();
+  return getLoteById(userId, loteId).then((l) => {
+    if (!l) return;
+    setLote(l);
+    setIdx(computeIndices(l));
+    setIdade(
+      daysBetween(
+        l.dataAlojamento,
+        l.status === 'encerrado' && l.encerramento ? l.encerramento.data : todayStr()
+      )
+    );
+  });
+}, [loteId, userId]);
 
-  useFocusEffect(recarregar);
+
+  useFocusEffect(
+  useCallback(() => {
+    recarregar();
+  }, [recarregar])
+);
+
 
   return { lote, idx, idade, recarregar };
 }

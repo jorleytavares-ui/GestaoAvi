@@ -35,6 +35,7 @@ serve(async (req) => {
       cidade,
       tipoEmpresa,
       codigoIntegracao,
+      codigoParceiro,
     } = await req.json();
 
     const camposObrigatorios = [
@@ -56,6 +57,12 @@ serve(async (req) => {
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
+    if (tipoEmpresa === 'Integrado' && !codigoParceiro) { // 👈 novo
+  return new Response(
+    JSON.stringify({ error: 'Informe o código do parceiro.' }),
+    { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+  );
+}
 
     const cpfLimpo = cpf.replace(/\D/g, '');
     const cpfCnpjLimpo = cpfCnpj.replace(/\D/g, '');
@@ -104,6 +111,7 @@ serve(async (req) => {
       cidade,
       tipo: tipoEmpresa,
       codigo_integracao: tipoEmpresa === 'Integrado' ? codigoIntegracao : null,
+      codigo_parceiro: tipoEmpresa === 'Integrado' ? String(codigoParceiro).trim() : null,
     });
 
     if (empresaError) {

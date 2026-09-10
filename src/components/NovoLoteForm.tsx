@@ -9,6 +9,8 @@ import { DateField } from './DateField';
 import { COLORS } from '../theme/colors';
 import { uid, todayStr, fmt, Lote, Galpao } from '../utils/calculations';
 import { LINHAGENS } from '../utils/constants';
+import { EmpresaVinculada } from '../services/empresas'; // 👈 novo import
+import { SimpleSelect } from './SimpleSelect';
 
 interface GalpaoFormData {
   id: string;
@@ -28,7 +30,6 @@ interface GalpaoFormData {
   racaoLinhasIncentivoQtd: string;
 }
 
-// helpers no topo do arquivo (fora do componente)
 function hhmmParaDate(hhmm: string | null): Date | null {
   if (!hhmm) return null;
   const [h, m] = hhmm.split(':').map(Number);
@@ -57,7 +58,6 @@ function galpaoParaFormData(g: Galpao): GalpaoFormData {
   };
 }
 
-
 function novoGalpaoVazio(): GalpaoFormData {
   return {
     id: uid(),
@@ -84,9 +84,15 @@ interface NovoLoteFormProps {
   onSave: (lote: Lote) => void;
   onCancel: () => void;
   loteInicial?: Lote;
+  empresasVinculadas?: EmpresaVinculada[]; // 👈 novo prop
 }
 
-export function NovoLoteForm({ onSave, onCancel, loteInicial }: NovoLoteFormProps) {
+export function NovoLoteForm({
+  onSave,
+  onCancel,
+  loteInicial,
+  empresasVinculadas = [],
+}: NovoLoteFormProps) {
   const editando = !!loteInicial;
 
   const [numero, setNumero] = useState(loteInicial?.numero ?? '');
@@ -105,6 +111,12 @@ export function NovoLoteForm({ onSave, onCancel, loteInicial }: NovoLoteFormProp
   );
   const [tecnico, setTecnico] = useState(loteInicial?.tecnico ?? '');
   const [nGranja, setNGranja] = useState((loteInicial as any)?.nGranja ?? '');
+
+  // 👇 novo estado: empresa destino selecionada (por nome, para usar no <Select>)
+ const [empresaDestinoId, setEmpresaDestinoId] = useState<string>(
+  (loteInicial as any)?.empresaId ?? ''
+);
+
   const [galpoes, setGalpoes] = useState<GalpaoFormData[]>(
     loteInicial?.galpoes?.length ? loteInicial.galpoes.map(galpaoParaFormData) : [novoGalpaoVazio()]
   );
@@ -122,91 +134,115 @@ export function NovoLoteForm({ onSave, onCancel, loteInicial }: NovoLoteFormProp
   const toHHMM = (d: Date | null) =>
     d ? d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : null;
 
+  const opcoesEmpresas = empresasVinculadas.map((e) => ({ label: e.nome, value: e.id }));
+
   const salvar = () => {
-  if (!numero.trim()) return setErro('Informe o número do lote.');
-  if (!nGranja.trim()) return setErro('Informe o número da granja.');
-  if (galpoes.some((g) => !g.nome.trim())) return setErro('Informe o nome de todos os galpões.');
-  if (galpoes.some((g) => !g.quantidadeAlojada || Number(g.quantidadeAlojada) <= 0))
-    return setErro('Informe a quantidade alojada em cada galpão.');
-  if (galpoes.some((g) => !g.aspecto)) return setErro('Informe o aspecto de cada galpão.');
+    if (!numero.trim()) return setErro('Informe o número do lote.');
+    if (!nGranja.trim()) return setErro('Informe o número da granja.');
 
-  setErro('');
+    // 👇 exige empresa destino apenas na criação, se houver empresas vinculadas disponíveis
+    if (!editando && empresasVinculadas.length > 0 && !empresaDestinoId) {
+  return setErro('Selecione a empresa destino do lote.');
+}
 
-  const camposEditados = {
-    numero: numero.trim(),
-    linhagem,
-    sexagem,
-    dataAlojamento: toISO(dataAlojamento),
-    horaCarregamento: toHHMM(horaCarregamento),
-    numPessoasDescarregamento:
-      numPessoasDescarregamento === '' ? null : Number(numPessoasDescarregamento),
-    tecnico: tecnico.trim(),
-    nGranja: nGranja.trim(),
-    galpoes: galpoes.map<Galpao>((g) => ({
-      id: g.id,
-      nome: g.nome.trim(),
-      quantidadeAlojada: Number(g.quantidadeAlojada),
-      pesoMedioAlojadoG: g.pesoMedioAlojadoG === '' ? null : Number(g.pesoMedioAlojadoG),
-      temperaturaAviario: g.temperaturaAviario === '' ? null : Number(g.temperaturaAviario),
-      pintosMortos: g.pintosMortos === '' ? null : Number(g.pintosMortos),
-      horaCarregamento: toHHMM(g.horaCarregamento),
-      horaChegada: toHHMM(g.horaChegada),
-      horaDescarregamento: toHHMM(g.horaDescarregamento),
-      aspecto: g.aspecto || null,
-      racaoComedouro: g.racaoComedouro || null,
-      racaoLinhasIncentivo: g.racaoLinhasIncentivo || null,
-      racaoLinhasIncentivoQtd:
-        g.racaoLinhasIncentivoQtd === '' ? null : Number(g.racaoLinhasIncentivoQtd),
-      aguaBebedouro: g.aguaBebedouro || null,
-      aquecedorLigado: g.aquecedorLigado || null,
-    })),
-  };
+    if (galpoes.some((g) => !g.nome.trim())) return setErro('Informe o nome de todos os galpões.');
+    if (galpoes.some((g) => !g.quantidadeAlojada || Number(g.quantidadeAlojada) <= 0))
+      return setErro('Informe a quantidade alojada em cada galpão.');
+    if (galpoes.some((g) => !g.aspecto)) return setErro('Informe o aspecto de cada galpão.');
 
-  if (editando && loteInicial) {
-    // 👇 mescla com o lote original, preservando histórico e metadados
-    const loteAtualizado: Lote = {
-      ...loteInicial,
-      ...camposEditados,
+    setErro('');
+
+    // 👇 encontra o id correspondente ao nome selecionado
+    const empresaSelecionada = empresasVinculadas.find((e) => e.id === empresaDestinoId);
+
+    const camposEditados: any = {
+      numero: numero.trim(),
+      linhagem,
+      sexagem,
+      dataAlojamento: toISO(dataAlojamento),
+      horaCarregamento: toHHMM(horaCarregamento),
+      numPessoasDescarregamento:
+        numPessoasDescarregamento === '' ? null : Number(numPessoasDescarregamento),
+      tecnico: tecnico.trim(),
+      nGranja: nGranja.trim(),
+      // 👇 novos campos com dados da empresa destino
+      empresaId: empresaSelecionada?.id ?? (loteInicial as any)?.empresaId ?? null,
+      empresaNome: empresaSelecionada?.nome ?? (loteInicial as any)?.empresaNome ?? null,
+      galpoes: galpoes.map<Galpao>((g) => ({
+        id: g.id,
+        nome: g.nome.trim(),
+        quantidadeAlojada: Number(g.quantidadeAlojada),
+        pesoMedioAlojadoG: g.pesoMedioAlojadoG === '' ? null : Number(g.pesoMedioAlojadoG),
+        temperaturaAviario: g.temperaturaAviario === '' ? null : Number(g.temperaturaAviario),
+        pintosMortos: g.pintosMortos === '' ? null : Number(g.pintosMortos),
+        horaCarregamento: toHHMM(g.horaCarregamento),
+        horaChegada: toHHMM(g.horaChegada),
+        horaDescarregamento: toHHMM(g.horaDescarregamento),
+        aspecto: g.aspecto || null,
+        racaoComedouro: g.racaoComedouro || null,
+        racaoLinhasIncentivo: g.racaoLinhasIncentivo || null,
+        racaoLinhasIncentivoQtd:
+          g.racaoLinhasIncentivoQtd === '' ? null : Number(g.racaoLinhasIncentivoQtd),
+        aguaBebedouro: g.aguaBebedouro || null,
+        aquecedorLigado: g.aquecedorLigado || null,
+      })),
     };
-    onSave(loteAtualizado);
-    return;
-  }
 
-  // fluxo de criação (igual ao original)
-  const lote: Lote = {
-    id: uid(),
-    ...camposEditados,
-    status: 'ativo',
-    registros: [],
-    racoes: [],
-    pesagens: [],
-    aguas: [],
-    mortalidades: [],
-    temperaturas: [],
-    avaliacoesTecnicas: [],
-    horaLeituraAgua: null,
-    retiradaSilo: [],
-    retiradaLinha: [],
-    saidaAves: [],
-    embarques: [],
-    sobrasAves: [],
-    medicamentosAbate: [],
-    observacaoAbate: '',
-    encerramento: null,
-    estoquesRacao: [],
-    produtosQuimicos: [],
-    medicamentosTerapeuticos: [],
+    if (editando && loteInicial) {
+      const loteAtualizado: Lote = {
+        ...loteInicial,
+        ...camposEditados,
+      };
+      onSave(loteAtualizado);
+      return;
+    }
+
+    const lote: Lote = {
+      id: uid(),
+      ...camposEditados,
+      status: 'ativo',
+      liberado: !!empresaSelecionada,
+      registros: [],
+      racoes: [],
+      pesagens: [],
+      aguas: [],
+      mortalidades: [],
+      temperaturas: [],
+      avaliacoesTecnicas: [],
+      horaLeituraAgua: null,
+      retiradaSilo: [],
+      retiradaLinha: [],
+      saidaAves: [],
+      embarques: [],
+      sobrasAves: [],
+      medicamentosAbate: [],
+      observacaoAbate: '',
+      encerramento: null,
+      estoquesRacao: [],
+      produtosQuimicos: [],
+      medicamentosTerapeuticos: [],
+    };
+
+    onSave(lote);
   };
-
-  onSave(lote);
-};
-
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
       <TextField label="Número do lote" placeholder="Ex: 24" value={numero} onChangeText={setNumero} />
 
       <Select label="Linhagem" value={linhagem} options={LINHAGENS} onChange={setLinhagem} />
+
+      {/* 👇 novo campo: só aparece se houver empresas vinculadas e não estiver editando */}
+      {!editando && empresasVinculadas.length > 0 && (
+  <SimpleSelect
+    label="Empresa destino"
+    value={empresaDestinoId}
+    opcoes={opcoesEmpresas}
+    onChange={setEmpresaDestinoId}
+    placeholder="Selecione a empresa destino"
+  />
+)}
+
 
       <View>
         <Text style={styles.label}>Sexagem</Text>

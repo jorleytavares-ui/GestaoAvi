@@ -1,17 +1,41 @@
 // src/auth/authVault.ts
+import { Platform } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import * as Crypto from 'expo-crypto';
 
-// SecureStore só aceita chaves alfanuméricas + . _ -
-// Por isso, criamos uma chave segura a partir do e-mail (hash), 
-// e mantemos um índice separado com a lista de e-mails salvos.
+// ---------- Wrapper multiplataforma (web usa localStorage) ----------
+
+async function setItem(key: string, value: string): Promise<void> {
+  if (Platform.OS === 'web') {
+    localStorage.setItem(key, value);
+    return;
+  }
+  await SecureStore.setItemAsync(key, value);
+}
+
+async function getItem(key: string): Promise<string | null> {
+  if (Platform.OS === 'web') {
+    return localStorage.getItem(key);
+  }
+  return SecureStore.getItemAsync(key);
+}
+
+async function deleteItem(key: string): Promise<void> {
+  if (Platform.OS === 'web') {
+    localStorage.removeItem(key);
+    return;
+  }
+  await SecureStore.deleteItemAsync(key);
+}
+
+// ---------------------------------------------------------------------
 
 const INDICE_KEY = 'gestaoavi_vault_indice';
 
 type CredencialSalva = {
   userId: string;
   email: string;
-  cpf?: string; // ✅ novo campo
+  cpf?: string;
   senhaHash: string;
   accessToken: string;
   refreshToken: string;
@@ -20,13 +44,6 @@ type CredencialSalva = {
   ultimoLoginOnline: string;
 };
 
-// ---------- Utils ----------
-
-/**
- * Gera o hash da senha usando o e-mail normalizado como "salt".
- * Isso evita que hashes de senhas iguais entre usuários diferentes
- * fiquem idênticos no armazenamento (proteção contra rainbow tables).
- */
 async function hashSenha(senha: string, email: string): Promise<string> {
   const emailNorm = email.trim().toLowerCase();
   return Crypto.digestStringAsync(
@@ -36,15 +53,12 @@ async function hashSenha(senha: string, email: string): Promise<string> {
 }
 
 function chaveDoEmail(email: string): string {
-  // Transforma o e-mail numa chave segura para o SecureStore
   const limpo = email.trim().toLowerCase().replace(/[^a-z0-9]/g, '_');
   return `gestaoavi_cred_${limpo}`;
 }
 
-// ---------- Índice de e-mails salvos no aparelho ----------
-
 async function getIndice(): Promise<string[]> {
-  const raw = await SecureStore.getItemAsync(INDICE_KEY);
+  const raw = await getItem(INDICE_KEY);
   return raw ? JSON.parse(raw) : [];
 }
 
@@ -53,20 +67,14 @@ async function adicionarAoIndice(email: string): Promise<void> {
   const indice = await getIndice();
   if (!indice.includes(emailNorm)) {
     indice.push(emailNorm);
-    await SecureStore.setItemAsync(INDICE_KEY, JSON.stringify(indice));
+    await setItem(INDICE_KEY, JSON.stringify(indice));
   }
 }
 
-// ---------- API pública do cofre ----------
-
-/**
- * Salva ou atualiza as credenciais de um usuário no cofre local.
- * Deve ser chamado sempre após um login online bem-sucedido.
- */
 export async function salvarCredencialLocal(params: {
   userId: string;
   email: string;
-  cpf?: string; // ✅
+  cpf?: string;
   senha: string;
   accessToken: string;
   refreshToken: string;
@@ -88,17 +96,16 @@ export async function salvarCredencialLocal(params: {
     ultimoLoginOnline: new Date().toISOString(),
   };
 
-  await SecureStore.setItemAsync(chaveDoEmail(emailNorm), JSON.stringify(credencial));
+  await setItem(chaveDoEmail(emailNorm), JSON.stringify(credencial));
   await adicionarAoIndice(emailNorm);
 }
 
-// Retorna todos os e-mails salvos localmente vinculados a esse CPF
 export async function buscarEmailLocalPorCpf(cpf: string): Promise<string[]> {
   const indice = await getIndice();
   const emailsEncontrados: string[] = [];
 
   for (const email of indice) {
-    const raw = await SecureStore.getItemAsync(chaveDoEmail(email));
+    const raw = await getItem(chaveDoEmail(email));
     if (raw) {
       const cred: CredencialSalva = JSON.parse(raw);
       if (cred.cpf === cpf) emailsEncontrados.push(cred.email);
@@ -108,61 +115,41 @@ export async function buscarEmailLocalPorCpf(cpf: string): Promise<string[]> {
   return emailsEncontrados;
 }
 
-
-/**
- * Verifica se existe uma credencial local para esse e-mail,
- * e se a senha digitada bate com o hash salvo.
- * Retorna a credencial completa se válida, ou null se inválida/inexistente.
- */
 export async function validarCredencialLocal(
   email: string,
   senha: string
 ): Promise<CredencialSalva | null> {
   const emailNorm = email.trim().toLowerCase();
-  const raw = await SecureStore.getItemAsync(chaveDoEmail(emailNorm));
+  const raw = await getItem(chaveDoEmail(emailNorm));
   if (!raw) return null;
 
   const credencial: CredencialSalva = JSON.parse(raw);
-  const senhaHash = await hashSenha(senha, emailNorm); // ✅ salt = e-mail
+  const senhaHash = await hashSenha(senha, emailNorm);
 
   if (senhaHash !== credencial.senhaHash) return null;
 
   return credencial;
 }
 
-/**
- * Retorna a credencial salva de um e-mail, sem validar senha.
- * Útil para saber se o e-mail já tem cadastro local (ex: exibir sugestão).
- */
 export async function getCredencialSalva(email: string): Promise<CredencialSalva | null> {
   const emailNorm = email.trim().toLowerCase();
-  const raw = await SecureStore.getItemAsync(chaveDoEmail(emailNorm));
+  const raw = await getItem(chaveDoEmail(emailNorm));
   return raw ? JSON.parse(raw) : null;
 }
 
-/**
- * Lista todos os e-mails que já logaram nesse aparelho (para telas de seleção rápida, opcional).
- */
 export async function listarEmailsSalvos(): Promise<string[]> {
   return getIndice();
 }
 
-/**
- * Remove a credencial de um e-mail específico do cofre (não usado no "Sair" comum,
- * apenas se o usuário explicitamente quiser remover o acesso offline daquele e-mail).
- */
 export async function removerCredencialLocal(email: string): Promise<void> {
   const emailNorm = email.trim().toLowerCase();
-  await SecureStore.deleteItemAsync(chaveDoEmail(emailNorm));
+  await deleteItem(chaveDoEmail(emailNorm));
 
   const indice = await getIndice();
   const novoIndice = indice.filter((e) => e !== emailNorm);
-  await SecureStore.setItemAsync(INDICE_KEY, JSON.stringify(novoIndice));
+  await setItem(INDICE_KEY, JSON.stringify(novoIndice));
 }
 
-/**
- * Atualiza apenas os tokens de uma credencial já salva (usado após refresh de sessão online).
- */
 export async function atualizarTokensLocal(
   email: string,
   accessToken: string,
@@ -178,5 +165,5 @@ export async function atualizarTokensLocal(
     ultimoLoginOnline: new Date().toISOString(),
   };
 
-  await SecureStore.setItemAsync(chaveDoEmail(email), JSON.stringify(atualizada));
+  await setItem(chaveDoEmail(email), JSON.stringify(atualizada));
 }

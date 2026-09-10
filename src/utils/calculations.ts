@@ -243,6 +243,8 @@ horaLeituraAgua?: string | null;
   liberado?: boolean;
   liberadoEm?: string | null;
   liberadoPor?: string | null;
+  empresaId?: string | null;
+  empresaNome?: string | null;
   [key: string]: any;
 }
 

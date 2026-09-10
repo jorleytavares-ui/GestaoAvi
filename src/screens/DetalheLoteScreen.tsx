@@ -51,7 +51,7 @@ function AvisoLoteLiberado({
 }: {
   lote: { id: string; owner_id: string; liberado: boolean };
   usuarioId: string;
-  onAssumido: () => void;
+  onAssumido: () => Promise<void> | void;
 }) {
   const [online, setOnline] = useState(true);
   const [carregando, setCarregando] = useState(false);
@@ -64,16 +64,18 @@ function AvisoLoteLiberado({
   if (!podeAssumirLote(lote, usuarioId)) return null;
 
   async function handleAssumir() {
-    setCarregando(true);
-    try {
-      await assumirLote(lote.id);
-      onAssumido();
-    } catch (e: any) {
-      Alert.alert('Não foi possível assumir o lote', e.message);
-    } finally {
-      setCarregando(false);
-    }
+  setCarregando(true);
+  try {
+    await assumirLote(lote.id);
+    await onAssumido(); // 👈 espera recarregar antes de seguir
+    Alert.alert('Sucesso', 'Você assumiu o lote com sucesso!'); // 👈 adicionar
+  } catch (e: any) {
+    Alert.alert('Não foi possível assumir o lote', e.message);
+  } finally {
+    setCarregando(false);
   }
+}
+
 
   return (
     <View style={styles.aviso}>
