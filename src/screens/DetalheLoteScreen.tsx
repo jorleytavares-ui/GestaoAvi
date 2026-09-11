@@ -124,7 +124,16 @@ export function DetalheLoteScreen({ route, navigation }: Props) {
         {lote && (
           <View style={styles.cardTopo}>
             <View style={styles.linha}>
-  <Text style={styles.nomeLote}>{`Lote ${lote.numero}`}</Text>
+  <View>
+    <Text style={styles.nomeLote}>{`Lote ${lote.numero}`}</Text>
+
+    {(lote as any).empresaNome && (
+      <Text style={styles.integradoTexto}>
+        Integrado:{' '}
+        <Text style={styles.integradoValor}>{(lote as any).empresaNome}</Text>
+      </Text>
+    )}
+  </View>
 
   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
     {user && lote.status !== 'encerrado' && (
@@ -175,8 +184,17 @@ export function DetalheLoteScreen({ route, navigation }: Props) {
   )}
 </Text>
 
+{/* 👇 NOVO: Nº da granja (vem de data.nGranja) */}
+{(lote as any).nGranja !== undefined && (
+  <View style={styles.linhaInfo}>
+    <Text style={styles.infoLabel}>Nº da granja</Text>
+    <Text style={styles.infoValor}>{(lote as any).nGranja}</Text>
+  </View>
+)}
 
-            <View style={styles.divisor} />
+
+
+<View style={styles.divisor} />
 
             <View style={styles.linhaInfo}>
               <Text style={styles.infoLabel}>Data de alojamento</Text>
@@ -189,16 +207,6 @@ export function DetalheLoteScreen({ route, navigation }: Props) {
               <Text style={styles.infoValor}>{totalAlojado}</Text>
             </View>
             <View style={styles.divisor} />
-
-            {(lote as any).numeroGranja !== undefined && (
-              <>
-                <View style={styles.linhaInfo}>
-                  <Text style={styles.infoLabel}>Nº da granja</Text>
-                  <Text style={styles.infoValor}>{(lote as any).numeroGranja}</Text>
-                </View>
-                <View style={styles.divisor} />
-              </>
-            )}
 
             <Text style={styles.secaoLabel}>GALPÕES DESTE LOTE</Text>
             {lote.galpoes.map(g => (
@@ -442,6 +450,16 @@ const styles = StyleSheet.create({
   tabButtonTextActive: {
     color: COLORS.primary,
   },
+  integradoTexto: { fontSize: 12.5, color: COLORS.inkSoft, marginTop: 4 },
+integradoValor: { fontWeight: '600', color: COLORS.ink },
+
+miniStatsRow: {
+  flexDirection: 'row',
+  gap: 8,
+  marginBottom: 4,
+},
+miniStatItem: { flex: 1 },
+
   abaContent: {
   minHeight: 400,
   paddingHorizontal: 16,

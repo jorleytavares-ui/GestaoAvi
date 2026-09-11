@@ -1,7 +1,10 @@
 // src/components/LoteCard.tsx
 import React from 'react';
 import { View, Text, Pressable } from 'react-native';
+import { Wheat, TrendingUp } from 'lucide-react-native';
 import { COLORS } from '../theme/colors';
+import { StatCard } from './StatCard';
+import { fmt } from '../utils/calculations';
 
 interface LoteCardProps {
   numero: string;
@@ -13,9 +16,14 @@ interface LoteCardProps {
   avesVivas: number;
   quantidadeAlojadaTotal: number;
   numGalpoes: number;
-  liberado?: boolean; // 👈 novo
-  ownerId?: string | null; // 👈 novo
-  ownerNome?: string | null; // 👈 novo
+  liberado?: boolean;
+  ownerId?: string | null;
+  ownerNome?: string | null;
+  empresaNome?: string | null;
+  numeroGranja?: string | number | null;
+  racaoAcumuladaKg?: number | null;       // 👈 novo
+  conversaoAlimentar?: number | null;     // 👈 novo
+  gpd?: number | null;                    // 👈 novo
   onPress: () => void;
 }
 
@@ -29,9 +37,14 @@ export function LoteCard({
   avesVivas,
   quantidadeAlojadaTotal,
   numGalpoes,
-  liberado, // 👈
-  ownerId, // 👈
-  ownerNome, // 👈
+  liberado,
+  ownerId,
+  ownerNome,
+  empresaNome,
+  numeroGranja,
+  racaoAcumuladaKg,
+  conversaoAlimentar,
+  gpd,
   onPress,
 }: LoteCardProps) {
   const ativo = status === 'ativo';
@@ -55,7 +68,15 @@ export function LoteCard({
           <Text style={{ fontSize: 16.8, fontWeight: '700', color: COLORS.ink }}>
             Lote {numero}
           </Text>
-          <Text style={{ fontSize: 12.8, color: COLORS.inkSoft }}>
+
+          {empresaNome && (
+            <Text style={{ fontSize: 12, color: COLORS.inkSoft, marginTop: 2 }}>
+              Integrado:{' '}
+              <Text style={{ fontWeight: '600', color: COLORS.ink }}>{empresaNome}</Text>
+            </Text>
+          )}
+
+          <Text style={{ fontSize: 12.8, color: COLORS.inkSoft, marginTop: 2 }}>
             {nomesGalpoes} · {linhagem}
           </Text>
         </View>
@@ -94,6 +115,14 @@ export function LoteCard({
         </Text>
       </Text>
 
+      {/* Nº da granja */}
+      {numeroGranja !== undefined && numeroGranja !== null && (
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 2 }}>
+          <Text style={{ fontSize: 12.5, color: COLORS.inkSoft }}>Nº da granja</Text>
+          <Text style={{ fontSize: 12.5, fontWeight: '600', color: COLORS.ink }}>{numeroGranja}</Text>
+        </View>
+      )}
+
       {/* Linha de indicadores */}
       <View
         style={{
@@ -121,6 +150,29 @@ export function LoteCard({
             {avesVivas}/{quantidadeAlojadaTotal}
           </Text>
         </Text>
+      </View>
+
+      {/* 👇 Mini StatCards (somente na Home) */}
+      <View style={{ flexDirection: 'row', gap: 8, marginTop: 2 }}>
+        <View style={{ flex: 1 }}>
+          <StatCard icon={Wheat} label="Ração ac." value={fmt(racaoAcumuladaKg ?? null, 0)} unit="kg" />
+        </View>
+        <View style={{ flex: 1 }}>
+          <StatCard
+            icon={TrendingUp}
+            label="Conversão"
+            value={conversaoAlimentar != null ? fmt(conversaoAlimentar, 3) : '—'}
+            unit=""
+          />
+        </View>
+        <View style={{ flex: 1 }}>
+          <StatCard
+            icon={TrendingUp}
+            label="GPD"
+            value={gpd != null ? fmt(gpd, 1) : '—'}
+            unit="g/dia"
+          />
+        </View>
       </View>
 
       {numGalpoes > 1 && (

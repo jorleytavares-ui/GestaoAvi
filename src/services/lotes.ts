@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase';
 import NetInfo from '@react-native-community/netinfo';
 import { getLoteById, upsertLote } from '../storage/storage';
 
+
 export async function assumirLote(loteId: string): Promise<void> {
   const netState = await NetInfo.fetch();
   if (!netState.isConnected) {
@@ -127,3 +128,26 @@ export function podeAssumirLote(
 ): boolean {
   return lote.liberado === true && lote.owner_id !== usuarioId;
 }
+
+// adicionar em src/services/lotes.ts
+import { Lote } from '../utils/calculations';
+
+export async function buscarLotesEncerradosDaEmpresa(empresaId: string): Promise<Lote[]> {
+  const { data, error } = await supabase
+    .from('lotes')
+    .select('id, owner_id, liberado, liberado_em, liberado_por, data')
+    .eq('empresa_id', empresaId)
+    .eq('status', 'encerrado');
+
+  if (error || !data) return [];
+
+  return data.map((r: any) => ({
+    ...(r.data as Lote),
+    ownerId: r.owner_id,
+    liberado: r.liberado ?? false,
+    liberadoEm: r.liberado_em ?? null,
+    liberadoPor: r.liberado_por ?? null,
+    syncStatus: 'sincronizado',
+  })) as Lote[];
+}
+
