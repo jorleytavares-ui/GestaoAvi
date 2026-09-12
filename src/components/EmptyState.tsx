@@ -5,51 +5,55 @@ import { Bird, Plus } from 'lucide-react-native';
 import { COLORS } from '../theme/colors';
 
 interface EmptyStateProps {
-  onNovo: () => void;
+  onNovo?: () => void;
+  titulo?: string;
+  descricao?: string;
+  icone?: React.ComponentType<any>;
 }
 
-export function EmptyState({ onNovo }: EmptyStateProps) {
+export function EmptyState({
+  onNovo,
+  titulo = 'Nenhum lote cadastrado',
+  descricao = 'Comece registrando o alojamento do seu primeiro lote de frangos de corte.',
+  icone: Icone = Bird,
+}: EmptyStateProps) {
   return (
-    <View
-      className="items-center px-8 py-16"
-      style={{ gap: 12 }}
-    >
-      <Bird size={40} strokeWidth={1.5} color={COLORS.primary} />
+    <View className="items-center px-8 py-16" style={{ gap: 12 }}>
+      <Icone size={40} strokeWidth={1.5} color={COLORS.primary} />
 
       <Text
         className="font-display text-center"
         style={{ fontSize: 19.2, fontWeight: '700', color: COLORS.ink }}
       >
-        Nenhum lote cadastrado
+        {titulo}
       </Text>
 
       <Text
         className="font-body text-center"
         style={{ fontSize: 14.4, color: COLORS.inkSoft }}
       >
-        Comece registrando o alojamento do seu primeiro lote de frangos de corte.
+        {descricao}
       </Text>
 
-      <Pressable
-        onPress={onNovo}
-        className="flex-row items-center"
-        style={{
-          backgroundColor: COLORS.primary,
-          borderRadius: 12,
-          paddingVertical: 10,
-          paddingHorizontal: 20,
-          marginTop: 8,
-          gap: 8,
-        }}
-      >
-        <Plus size={16} color="#FFFFFF" />
-        <Text
-          className="font-bodySemi"
-          style={{ fontSize: 14, color: '#FFFFFF' }}
+      {onNovo && (
+        <Pressable
+          onPress={onNovo}
+          className="flex-row items-center"
+          style={{
+            backgroundColor: COLORS.primary,
+            borderRadius: 12,
+            paddingVertical: 10,
+            paddingHorizontal: 20,
+            marginTop: 8,
+            gap: 8,
+          }}
         >
-          Novo lote
-        </Text>
-      </Pressable>
+          <Plus size={16} color="#FFFFFF" />
+          <Text className="font-bodySemi" style={{ fontSize: 14, color: '#FFFFFF' }}>
+            Novo lote
+          </Text>
+        </Pressable>
+      )}
     </View>
   );
 }

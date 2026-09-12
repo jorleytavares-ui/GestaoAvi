@@ -11,6 +11,7 @@ export type RootStackParamList = {
   Configuracoes: undefined;
   CadastroUsuario: undefined;
   EditarEmpresa: undefined;
+  SolicitacoesVinculo: undefined;
 };
 
 

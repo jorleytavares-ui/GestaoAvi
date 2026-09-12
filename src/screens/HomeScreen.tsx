@@ -17,6 +17,10 @@ import { listarEmpresasVinculadas, EmpresaVinculada } from '../services/empresas
 import { buscarLotesEncerradosDaEmpresa } from '../services/lotes';
 import type { RootStackParamList } from '../navigation/types';
 import { useAuth } from '../auth/AuthContext';
+import { StatusVinculoBanner } from '../components/StatusVinculoBanner';
+import { SolicitacoesPendentesBanner } from '../components/SolicitacoesPendentesBanner';
+
+
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Home'>;
 type StatusFiltro = 'ativo' | 'encerrado';
@@ -134,6 +138,9 @@ export function HomeScreen({ navigation }: Props) {
     <View style={{ flex: 1, backgroundColor: COLORS.bg }}>
       <ScrollView contentContainerStyle={{ paddingBottom: 100 }}>
         <AppHeader />
+
+        {!isIntegracao && <StatusVinculoBanner empresaId={empresaId} />}
+        {isIntegracao && <SolicitacoesPendentesBanner empresaId={empresaId} />}
 
         {isIntegracao && (
           <View style={{ paddingHorizontal: 16, marginBottom: 12 }}>

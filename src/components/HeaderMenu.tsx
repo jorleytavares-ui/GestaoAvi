@@ -13,12 +13,19 @@ export function HeaderMenu() {
   const [visivel, setVisivel] = useState(false);
   const [sincronizando, setSincronizando] = useState(false);
   const navigation = useNavigation<any>();
-  const { signOut, userId } = useAuth(); // ✅ userId obtido aqui, no topo
+  const { signOut, userId, empresaTipo } = useAuth(); // 👈 empresaTipo adicionado
   const { perfil, ownerId } = usePerfil();
+
+  const isIntegracao = empresaTipo === 'Integracao';
 
   function irParaConfiguracoes() {
     setVisivel(false);
     navigation.navigate('Configuracoes');
+  }
+
+  function irParaSolicitacoesVinculo() {
+    setVisivel(false);
+    navigation.navigate('SolicitacoesVinculo');
   }
 
   async function sair() {
@@ -38,7 +45,7 @@ export function HeaderMenu() {
       const falhas = resultado?.push?.falhas ?? 0;
 
       if (falhas > 0) {
-        const lotes = await getLotes(userId); // ✅ usa a variável do topo
+        const lotes = await getLotes(userId);
         const comErro = lotes.filter((l) => l.syncStatus === 'erro');
         const detalhes = comErro
           .map((l) => `Lote ${l.numero}: ${l.syncError ?? 'erro desconhecido'}`)
@@ -100,37 +107,46 @@ export function HeaderMenu() {
             </TouchableOpacity>
 
             {podeCadastrarUsuario(perfil?.papelId) && (
-  <>
-    <View style={styles.separador} />
-    <TouchableOpacity
-      style={styles.item}
-      onPress={() => {
-        setVisivel(false);
-        navigation.navigate('CadastroUsuario');
-      }}
-    >
-      <Ionicons name="person-add-outline" size={20} color="#333" />
-      <Text style={styles.itemTexto}>Cadastro de Usuário</Text>
-    </TouchableOpacity>
-  </>
-)}
+              <>
+                <View style={styles.separador} />
+                <TouchableOpacity
+                  style={styles.item}
+                  onPress={() => {
+                    setVisivel(false);
+                    navigation.navigate('CadastroUsuario');
+                  }}
+                >
+                  <Ionicons name="person-add-outline" size={20} color="#333" />
+                  <Text style={styles.itemTexto}>Cadastro de Usuário</Text>
+                </TouchableOpacity>
+              </>
+            )}
 
-{podeEditarEmpresa(perfil?.papelId) && (
-  <>
-    <View style={styles.separador} />
-    <TouchableOpacity
-      style={styles.item}
-      onPress={() => {
-        setVisivel(false);
-        navigation.navigate('EditarEmpresa');
-      }}
-    >
-      <Ionicons name="business-outline" size={20} color="#333" />
-      <Text style={styles.itemTexto}>Editar Empresa</Text>
-    </TouchableOpacity>
-  </>
-)}
+            {podeEditarEmpresa(perfil?.papelId) && (
+              <>
+                <View style={styles.separador} />
+                <TouchableOpacity
+                  style={styles.item}
+                  onPress={() => {
+                    setVisivel(false);
+                    navigation.navigate('EditarEmpresa');
+                  }}
+                >
+                  <Ionicons name="business-outline" size={20} color="#333" />
+                  <Text style={styles.itemTexto}>Editar Empresa</Text>
+                </TouchableOpacity>
+              </>
+            )}
 
+            {isIntegracao && podeEditarEmpresa(perfil?.papelId) && (
+              <>
+                <View style={styles.separador} />
+                <TouchableOpacity style={styles.item} onPress={irParaSolicitacoesVinculo}>
+                  <Ionicons name="link-outline" size={20} color="#333" />
+                  <Text style={styles.itemTexto}>Solicitações de vínculo</Text>
+                </TouchableOpacity>
+              </>
+            )}
 
             <View style={styles.separador} />
 
@@ -138,9 +154,6 @@ export function HeaderMenu() {
               <Ionicons name="log-out-outline" size={20} color="#d32f2f" />
               <Text style={[styles.itemTexto, { color: '#d32f2f' }]}>Sair</Text>
             </TouchableOpacity>
-
-
-            
           </View>
         </TouchableOpacity>
       </Modal>
@@ -158,7 +171,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderRadius: 8,
     paddingVertical: 8,
-    minWidth: 200,
+    minWidth: 220,
     elevation: 5,
     shadowColor: '#000',
     shadowOpacity: 0.2,

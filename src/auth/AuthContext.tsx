@@ -384,28 +384,60 @@ async function signUp(params: {
   const emailSintetico = `${cpfLimpo}-${empresaIdNovo}@gestaoavi.com`;
 
   const { data, error } = await supabase.functions.invoke('cadastrar-empresa', {
-    body: {
-      empresaId: empresaIdNovo,
-      nomeEmpresa: params.nomeEmpresa,
-      nomeUsuario: params.nomeUsuario,
-      cpf: cpfLimpo,
-      senha: params.senha,
-      emailContato: params.emailContato,
-      tipoPessoa: params.tipoPessoa,
-      cpfCnpj: params.cpfCnpj.replace(/\D/g, ''),
-      responsavel: params.responsavel,
-      telefone: params.telefone,
-      paisId: params.paisId,
-      estadoId: params.estadoId,
-      cidade: params.cidade,
-      tipoEmpresa: params.tipoEmpresa,
-      codigoIntegracao: params.codigoIntegracao,
-      codigoParceiro: params.codigoParceiro,
-    },
-  });
+  body: {
+    empresaId: empresaIdNovo,
+    nomeEmpresa: params.nomeEmpresa,
+    nomeUsuario: params.nomeUsuario,
+    cpf: cpfLimpo,
+    senha: params.senha,
+    emailContato: params.emailContato,
+    tipoPessoa: params.tipoPessoa,
+    cpfCnpj: params.cpfCnpj.replace(/\D/g, ''),
+    responsavel: params.responsavel,
+    telefone: params.telefone,
+    paisId: params.paisId,
+    estadoId: params.estadoId,
+    cidade: params.cidade,
+    tipoEmpresa: params.tipoEmpresa,
+    codigoIntegracao: params.codigoIntegracao,
+    codigoParceiro: params.codigoParceiro,
+  },
+});
 
-  if (error) return { error: 'Erro ao cadastrar. Verifique sua conexão.' };
-  if (data?.error) return { error: data.error };
+if (error) {
+  // Tenta extrair a mensagem real retornada pela Edge Function
+  let mensagem = 'Erro ao cadastrar. Verifique sua conexão.';
+
+  try {
+    const contexto = (error as any)?.context;
+    if (contexto && typeof contexto.json === 'function') {
+      const corpo = await contexto.json();
+      if (corpo?.error) mensagem = corpo.error;
+    }
+  } catch {
+    // se não conseguir ler o corpo, mantém a mensagem genérica de conexão
+  }
+
+  // Traduz erros técnicos conhecidos em mensagens amigáveis
+  if (mensagem.includes('uq_empresas_cpf_cnpj')) {
+    mensagem = 'Já existe uma empresa cadastrada com esse CPF ou CNPJ.';
+  } else if (mensagem.includes('uq_usuarios_cpf') || mensagem.includes('cpf')) {
+    mensagem = 'Já existe um usuário cadastrado com esse CPF.';
+  } else if (mensagem.toLowerCase().includes('email')) {
+    mensagem = 'Já existe um cadastro com esse e-mail.';
+  }
+
+  return { error: mensagem };
+}
+
+if (data?.error) {
+  let mensagem = data.error;
+  if (mensagem.includes('uq_empresas_cpf_cnpj')) {
+    mensagem = 'Já existe uma empresa cadastrada com esse CPF ou CNPJ.';
+  }
+  return { error: mensagem };
+}
+
 
   const { data: loginData, error: loginError } = await supabase.auth.signInWithPassword({
     email: emailSintetico,

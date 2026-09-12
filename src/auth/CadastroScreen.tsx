@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import {
-  View, Text, TouchableOpacity, Alert,
+  View, Text, TouchableOpacity,
   ActivityIndicator, ScrollView, KeyboardAvoidingView, Platform,
   Modal, TextInput, FlatList,
 } from 'react-native';
@@ -9,6 +9,7 @@ import { COLORS } from '../theme/colors';
 import { supabase } from '../lib/supabase';
 import { TextField } from '../components/TextField';
 import { SimpleSelect } from '../components/SimpleSelect';
+import { alertaUniversal } from '../utils/alerta';
 
 type Pais = { id: number; nome: string; sigla: string };
 type Estado = { id: number; nome: string; sigla: string };
@@ -345,9 +346,9 @@ export function CadastroScreen({ navigation }: any) {
   async function handleCadastro() {
     const erro = validar();
     if (erro) {
-      Alert.alert('Atenção', erro);
-      return;
-    }
+  alertaUniversal('Atenção', erro);
+  return;
+}
 
     setCarregando(true);
     const resultado = await signUp({
@@ -370,9 +371,9 @@ export function CadastroScreen({ navigation }: any) {
     setCarregando(false);
 
     if (resultado.error) {
-      Alert.alert('Erro ao cadastrar', resultado.error);
+      alertaUniversal('Erro ao cadastrar', resultado.error);
     } else {
-      Alert.alert('Cadastro concluído', 'Sua empresa foi criada com sucesso!');
+      alertaUniversal('Cadastro concluído', 'Sua empresa foi criada com sucesso!');
     }
   }
 

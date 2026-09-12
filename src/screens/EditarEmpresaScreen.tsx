@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, ActivityIndicator,
-  Alert, KeyboardAvoidingView, Platform, Modal, TextInput, FlatList,
+  KeyboardAvoidingView, Platform, Modal, TextInput, FlatList,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { supabase } from '../lib/supabase';
@@ -11,6 +11,7 @@ import { COLORS } from '../theme/colors';
 import { TextField } from '../components/TextField';
 import { SimpleSelect } from '../components/SimpleSelect';
 import { AppHeader } from '../components/AppHeader';
+import { alertaUniversal } from '../utils/alerta';
 
 type Pais = { id: number; nome: string; sigla: string };
 type Estado = { id: number; nome: string; sigla: string };
@@ -219,7 +220,7 @@ export function EditarEmpresaScreen() {
         .maybeSingle();
 
       if (error || !empresa) {
-        Alert.alert('Erro', 'Não foi possível carregar os dados da empresa.');
+        alertaUniversal('Erro', 'Não foi possível carregar os dados da empresa.');
         navigation.goBack();
         return;
       }
@@ -340,7 +341,7 @@ export function EditarEmpresaScreen() {
   async function salvar() {
     const erro = validar();
     if (erro) {
-      Alert.alert('Atenção', erro);
+      alertaUniversal('Atenção', erro);
       return;
     }
     if (!perfil?.empresa_id) return;
@@ -366,12 +367,12 @@ export function EditarEmpresaScreen() {
     setSalvando(false);
 
     if (error) {
-      Alert.alert('Erro ao salvar', error.message);
+      alertaUniversal('Erro ao salvar', error.message);
       return;
     }
-    Alert.alert('Sucesso', 'Dados da empresa atualizados.', [
-      { text: 'OK', onPress: () => navigation.goBack() },
-    ]);
+    alertaUniversal('Sucesso', 'Dados atualizados.', [
+  { text: 'OK', onPress: () => navigation.goBack() },
+]);
   }
 
   if (carregando) {

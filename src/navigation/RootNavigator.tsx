@@ -16,8 +16,9 @@ import { LicencaBloqueadaScreen } from '../screens/LicencaBloqueadaScreen';
 import type { RootStackParamList, AuthStackParamList } from './types';
 import { COLORS } from '../theme/colors';
 import { CadastroUsuarioScreen } from '../screens/CadastroUsuarioScreen';
-import { TrocarSenhaObrigatoria } from '../screens/TrocarSenhaObrigatoria'; 
+import { TrocarSenhaObrigatoria } from '../screens/TrocarSenhaObrigatoria';
 import { EditarEmpresaScreen } from '../screens/EditarEmpresaScreen';
+import { SolicitacoesVinculoScreen } from '../screens/SolicitacoesVinculoScreen'; // 👈 novo
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const AuthStack = createNativeStackNavigator<AuthStackParamList>();
@@ -39,10 +40,10 @@ function AppNavigator() {
       <Stack.Screen name="DetalheLote" component={DetalheLoteScreen} />
       <Stack.Screen name="EncerrarForm" component={EncerrarForm} options={{ title: 'Encerrar lote' }} />
       <Stack.Screen
-  name="EditarEmpresa"
-  component={EditarEmpresaScreen}
-  options={{ headerShown: false }}
-/>
+        name="EditarEmpresa"
+        component={EditarEmpresaScreen}
+        options={{ headerShown: false }}
+      />
       <Stack.Screen
         name="Configuracoes"
         component={ConfiguracoesScreen}
@@ -52,6 +53,11 @@ function AppNavigator() {
         name="CadastroUsuario"
         component={CadastroUsuarioScreen}
         options={{ headerShown: true, title: 'Cadastro de Usuário' }}
+      />
+      <Stack.Screen
+        name="SolicitacoesVinculo"
+        component={SolicitacoesVinculoScreen}
+        options={{ headerShown: false }}
       />
     </Stack.Navigator>
   );
@@ -65,11 +71,6 @@ function Loading() {
   );
 }
 
-// Intercepta o acesso ao app quando a licença estiver em situação bloqueante
-// (expirada, relógio manipulado, ou offline sem nunca ter sincronizado a licença).
-// O limite de lotes por plano NÃO é tratado aqui — isso é validado dentro do
-// fluxo de criação de lote (NovoLoteScreen), pois não deve impedir o acesso
-// às demais funcionalidades do app (consultar histórico, sincronizar, etc.).
 function LicencaGate({ children }: { children: React.ReactNode }) {
   const { carregando, status, offlineSemCache, relogioSuspeito, recarregar } = useLicenca();
 
@@ -108,7 +109,7 @@ function LicencaGate({ children }: { children: React.ReactNode }) {
 }
 
 export function RootNavigator() {
-  const { session, carregandoSessao, precisaRedefinirSenha } = useAuth(); // ✅ novo
+  const { session, carregandoSessao, precisaRedefinirSenha } = useAuth();
 
   if (carregandoSessao) {
     return <Loading />;
@@ -118,7 +119,6 @@ export function RootNavigator() {
     return <AuthNavigator />;
   }
 
-  // ✅ Bloqueia o acesso ao app até o usuário trocar a senha temporária
   if (precisaRedefinirSenha) {
     return <TrocarSenhaObrigatoria />;
   }
