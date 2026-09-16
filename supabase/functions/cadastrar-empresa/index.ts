@@ -122,13 +122,28 @@ serve(async (req) => {
       });
     }
 
+    // Define o papel do usuário criador com base no tipo de empresa
+let papelId: number;
+
+switch (tipoEmpresa) {
+  case 'Integrado':
+    papelId = 3; // integrado
+    break;
+  case 'Integracao':
+    papelId = 7; // gestor
+    break;
+  default: // 'Independente'
+    papelId = 3; // integrado
+    break;
+}
+
     const { error: perfilError } = await supabaseAdmin.from('perfis').insert({
       id: userId,
       nome: nomeUsuario,
       email: emailSintetico,
       email_contato: emailContato?.trim() || null,
       empresa_id: empresaId,
-      papel_id: 1,
+      papel_id: papelId,
       cpf: cpfLimpo,
     });
 

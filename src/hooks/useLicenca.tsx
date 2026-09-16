@@ -7,7 +7,7 @@ import { usePerfil } from './usePerfil';
 import { salvarLicencaCache, getLicencaCache } from '../storage/licencaCache';
 import { getTrustedNow, sincronizarRelogioServidor } from '../services/serverTime';
 
-type StatusLicenca = 'trial' | 'ativa' | 'expirada';
+type StatusLicenca = 'trial' | 'ativa' | 'expirada' | 'pendente';
 
 type Licenca = {
   empresa_id: string;
@@ -17,6 +17,20 @@ type Licenca = {
   trial_inicio: string;
   trial_dias: number;
   expira_em: string | null;
+  plano_id: string | null;
+  plano_nome: string | null;
+  plano_descricao: string | null;
+  tipo_limite: string | null;
+  limite_frangos: number | null;
+  frangos_utilizados: number | null;
+  usa_periodo: boolean | null;
+  data_inicial: string | null;
+  data_final: string | null;
+  usa_limite_lotes: boolean | null;
+  usa_limite_frangos: boolean | null;
+  valor_pago: number | null;
+  cobranca_id: string | null;
+  pagamento_status: string | null;
 };
 
 type LicencaInfo = {
@@ -28,6 +42,7 @@ type LicencaInfo = {
   motivoBloqueio: string | null;
   offlineSemCache: boolean;
   relogioSuspeito: boolean;
+  pagamentoAtrasado: boolean;
   recarregar: () => Promise<void>;
 };
 
@@ -36,7 +51,7 @@ type LicencaInfo = {
  * nunca a hora bruta do aparelho.
  */
 function calcularStatus(
-  licenca: Omit<Licenca, 'status'> & { status: StatusLicenca },
+  licenca: Pick<Licenca, 'status' | 'trial_inicio' | 'trial_dias' | 'expira_em'>,
   agoraMs: number
 ): StatusLicenca {
   let statusAtual = licenca.status;
@@ -47,7 +62,7 @@ function calcularStatus(
     if (diffDias >= licenca.trial_dias) statusAtual = 'expirada';
   }
 
-  if (statusAtual === 'ativa' && licenca.expira_em) {
+  if ((statusAtual === 'ativa' || statusAtual === 'pendente') && licenca.expira_em) {
     const expiraMs = new Date(licenca.expira_em).getTime();
     if (expiraMs < agoraMs) statusAtual = 'expirada';
   }
@@ -105,10 +120,7 @@ export function useLicenca(): LicencaInfo {
 
       const statusRecalculado = calcularStatus(
         {
-          empresa_id: cache.empresaId,
           status: cache.status,
-          limite_lotes: cache.limiteLotes,
-          lotes_gerados: cache.lotesGerados,
           trial_inicio: cache.trialInicio,
           trial_dias: cache.trialDias,
           expira_em: cache.expiraEm,
@@ -124,6 +136,20 @@ export function useLicenca(): LicencaInfo {
         trial_inicio: cache.trialInicio,
         trial_dias: cache.trialDias,
         expira_em: cache.expiraEm,
+        plano_id: cache.planoId ?? null,
+        plano_nome: cache.planoNome ?? null,
+        plano_descricao: cache.planoDescricao ?? null,
+        tipo_limite: cache.tipoLimite ?? null,
+        limite_frangos: cache.limiteFrangos ?? null,
+        frangos_utilizados: cache.frangosUtilizados ?? null,
+        usa_periodo: cache.usaPeriodo ?? null,
+        data_inicial: cache.dataInicial ?? null,
+        data_final: cache.dataFinal ?? null,
+        usa_limite_lotes: cache.usaLimiteLotes ?? null,
+        usa_limite_frangos: cache.usaLimiteFrangos ?? null,
+        valor_pago: cache.valorPago ?? null,
+        cobranca_id: cache.cobrancaId ?? null,
+        pagamento_status: cache.pagamentoStatus ?? null,
       });
       setCarregando(false);
       return;
@@ -141,10 +167,7 @@ export function useLicenca(): LicencaInfo {
       if (cache && agoraMs !== null) {
         const statusRecalculado = calcularStatus(
           {
-            empresa_id: cache.empresaId,
             status: cache.status,
-            limite_lotes: cache.limiteLotes,
-            lotes_gerados: cache.lotesGerados,
             trial_inicio: cache.trialInicio,
             trial_dias: cache.trialDias,
             expira_em: cache.expiraEm,
@@ -159,6 +182,20 @@ export function useLicenca(): LicencaInfo {
           trial_inicio: cache.trialInicio,
           trial_dias: cache.trialDias,
           expira_em: cache.expiraEm,
+          plano_id: cache.planoId ?? null,
+          plano_nome: cache.planoNome ?? null,
+          plano_descricao: cache.planoDescricao ?? null,
+          tipo_limite: cache.tipoLimite ?? null,
+          limite_frangos: cache.limiteFrangos ?? null,
+          frangos_utilizados: cache.frangosUtilizados ?? null,
+          usa_periodo: cache.usaPeriodo ?? null,
+          data_inicial: cache.dataInicial ?? null,
+          data_final: cache.dataFinal ?? null,
+          usa_limite_lotes: cache.usaLimiteLotes ?? null,
+          usa_limite_frangos: cache.usaLimiteFrangos ?? null,
+          valor_pago: cache.valorPago ?? null,
+          cobranca_id: cache.cobrancaId ?? null,
+          pagamento_status: cache.pagamentoStatus ?? null,
         });
       } else {
         setLicenca(null);
@@ -168,21 +205,43 @@ export function useLicenca(): LicencaInfo {
       return;
     }
 
-    const statusAtual = calcularStatus(licencaData as any, agoraMs ?? Date.now());
-    setLicenca({ ...licencaData, status: statusAtual });
 
-    await salvarLicencaCache({
-      empresaId: licencaData.empresa_id,
-      status: licencaData.status,
-      limiteLotes: licencaData.limite_lotes,
-      lotesGerados: licencaData.lotes_gerados,
-      trialInicio: licencaData.trial_inicio,
-      trialDias: licencaData.trial_dias,
-      expiraEm: licencaData.expira_em,
-      atualizadoEm: new Date().toISOString(),
-    });
+    const status = calcularStatus(licencaData as any, agoraMs ?? Date.now());
+setLicenca({ ...licencaData, status });
 
-    setCarregando(false);
+await salvarLicencaCache({
+  empresaId: licencaData.empresa_id,
+  status,
+  limiteLotes: licencaData.limite_lotes,
+  lotesGerados: licencaData.lotes_gerados,
+  trialInicio: licencaData.trial_inicio,
+  trialDias: licencaData.trial_dias,
+  expiraEm: licencaData.expira_em,
+
+  planoId: licencaData.plano_id,
+  planoNome: licencaData.plano_nome,
+  planoDescricao: licencaData.plano_descricao,
+  tipoLimite: licencaData.tipo_limite,
+
+  usaLimiteLotes: licencaData.usa_limite_lotes,
+  usaLimiteFrangos: licencaData.usa_limite_frangos,
+  limiteFrangos: licencaData.limite_frangos,
+  frangosUtilizados: licencaData.frangos_utilizados,
+
+  usaPeriodo: licencaData.usa_periodo,
+  dataInicial: licencaData.data_inicial,
+  dataFinal: licencaData.data_final,
+
+  asaasCustomerId: licencaData.asaas_customer_id ?? null,
+  asaasSubscriptionId: licencaData.asaas_subscription_id ?? null,
+  cobrancaId: licencaData.cobranca_id ?? null,
+  pagamentoStatus: licencaData.pagamento_status ?? null,
+  valorPago: licencaData.valor_pago ?? null,
+
+  atualizadoEm: new Date().toISOString(),
+});
+setCarregando(false);
+
   }, [perfil, offline]);
 
   useEffect(() => {
@@ -198,6 +257,10 @@ export function useLicenca(): LicencaInfo {
         )
       : null;
 
+  const pagamentoAtrasado =
+    !!licenca &&
+    (licenca.pagamento_status === 'OVERDUE' || licenca.pagamento_status === 'PAYMENT_OVERDUE');
+
   let podeCriarLote = false;
   let motivoBloqueio: string | null = null;
 
@@ -210,8 +273,20 @@ export function useLicenca(): LicencaInfo {
     motivoBloqueio = 'Licença não encontrada.';
   } else if (licenca.status === 'expirada') {
     motivoBloqueio = 'Sua licença expirou. Conecte-se à internet para renovar.';
-  } else if (licenca.lotes_gerados >= licenca.limite_lotes) {
+  } else if (pagamentoAtrasado) {
+    motivoBloqueio = 'Seu pagamento está em atraso. Regularize para continuar usando o sistema.';
+  } else if (
+    licenca.usa_limite_lotes &&
+    licenca.limite_lotes != null &&
+    licenca.lotes_gerados >= licenca.limite_lotes
+  ) {
     motivoBloqueio = `Limite de ${licenca.limite_lotes} lotes atingido para o plano atual.`;
+  } else if (
+    licenca.usa_limite_frangos &&
+    licenca.limite_frangos != null &&
+    (licenca.frangos_utilizados ?? 0) >= licenca.limite_frangos
+  ) {
+    motivoBloqueio = `Limite de ${licenca.limite_frangos} frangos atingido para o plano atual.`;
   } else {
     podeCriarLote = true;
   }
@@ -225,6 +300,7 @@ export function useLicenca(): LicencaInfo {
     motivoBloqueio,
     offlineSemCache,
     relogioSuspeito,
+    pagamentoAtrasado,
     recarregar: buscarLicenca,
   };
 }

@@ -1,3 +1,6 @@
+import { Plano } from '../services/planos';
+
+
 export type AuthStackParamList = {
   Login: undefined;
   Cadastro: undefined;
@@ -12,6 +15,10 @@ export type RootStackParamList = {
   CadastroUsuario: undefined;
   EditarEmpresa: undefined;
   SolicitacoesVinculo: undefined;
+  Planos: undefined;
+  EscolherPlano: undefined;
+  Checkout: { plano: Plano };
+  
 };
 
 

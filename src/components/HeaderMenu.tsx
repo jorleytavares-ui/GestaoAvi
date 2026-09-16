@@ -138,6 +138,29 @@ export function HeaderMenu() {
               </>
             )}
 
+            {perfil?.papelId === 1 && (
+  <>
+    <View style={styles.separador} />
+    <TouchableOpacity
+      style={styles.item}
+      onPress={() => {
+        setVisivel(false);
+        navigation.navigate('Planos');
+      }}
+    >
+      <Ionicons name="pricetags-outline" size={20} color="#333" />
+      <Text style={styles.itemTexto}>Cad. Planos (Admin)</Text>
+    </TouchableOpacity>
+  </>
+)}
+
+<View style={styles.separador} />
+            <TouchableOpacity style={styles.item} onPress={() => navigation.navigate('EscolherPlano')}>
+              <Ionicons name="pricetags-outline" size={20} color="#333" />
+  <Text style={styles.itemTexto}>Meu Plano</Text>
+</TouchableOpacity>
+
+
             {isIntegracao && podeEditarEmpresa(perfil?.papelId) && (
               <>
                 <View style={styles.separador} />

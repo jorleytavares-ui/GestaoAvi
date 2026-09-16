@@ -12,13 +12,17 @@ import { LoginScreen } from '../auth/LoginScreen';
 import { CadastroScreen } from '../auth/CadastroScreen';
 import { useAuth } from '../auth/AuthContext';
 import { useLicenca } from '../hooks/useLicenca';
+import { usePerfil } from '../hooks/usePerfil';
 import { LicencaBloqueadaScreen } from '../screens/LicencaBloqueadaScreen';
 import type { RootStackParamList, AuthStackParamList } from './types';
 import { COLORS } from '../theme/colors';
 import { CadastroUsuarioScreen } from '../screens/CadastroUsuarioScreen';
 import { TrocarSenhaObrigatoria } from '../screens/TrocarSenhaObrigatoria';
 import { EditarEmpresaScreen } from '../screens/EditarEmpresaScreen';
-import { SolicitacoesVinculoScreen } from '../screens/SolicitacoesVinculoScreen'; // 👈 novo
+import { SolicitacoesVinculoScreen } from '../screens/SolicitacoesVinculoScreen';
+import { PlanosScreen } from '../screens/PlanosScreen';
+import { EscolherPlanoScreen } from '../screens/EscolherPlanoScreen';
+import { CheckoutScreen } from '../screens/CheckoutScreen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const AuthStack = createNativeStackNavigator<AuthStackParamList>();
@@ -59,6 +63,17 @@ function AppNavigator() {
         component={SolicitacoesVinculoScreen}
         options={{ headerShown: false }}
       />
+      <Stack.Screen
+        name="Planos"
+        component={PlanosScreen}
+        options={{ headerShown: true, title: 'Planos' }}
+      />
+      <Stack.Screen
+  name="Checkout"
+  component={CheckoutScreen}
+  options={{ headerShown: true, title: 'Finalizar assinatura' }}
+/>
+      <Stack.Screen name="EscolherPlano" component={EscolherPlanoScreen} />
     </Stack.Navigator>
   );
 }
@@ -72,7 +87,18 @@ function Loading() {
 }
 
 function LicencaGate({ children }: { children: React.ReactNode }) {
+  const { perfil, carregandoPerfil } = usePerfil();
   const { carregando, status, offlineSemCache, relogioSuspeito, recarregar } = useLicenca();
+
+  // Evita "flash" da tela de bloqueio antes do perfil carregar
+  if (carregandoPerfil) {
+    return <Loading />;
+  }
+
+  // Admin proprietário do app nunca é bloqueado por licença
+  if (perfil?.papelId === 1) {
+    return <>{children}</>;
+  }
 
   if (carregando) {
     return <Loading />;
