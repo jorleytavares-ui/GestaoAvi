@@ -15,7 +15,6 @@ serve(async (req) => {
     const pagamento = payload.payment;
     const subscriptionObj = payload.subscription;
 
-    // ✅ cobre tanto eventos de payment quanto de subscription
     const subscriptionId = pagamento?.subscription ?? subscriptionObj?.id;
 
     if (!subscriptionId) {
@@ -27,16 +26,30 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     );
 
+    // 1. Localiza a assinatura pelo subscription_id
+    //    (tabela assinaturas só tem: id, usuario_id, plano_id, asaas_customer_id,
+    //     asaas_subscription_id, status, criado_em, empresa_id, ultimo_pagamento_em,
+    //     vencimento_em, atualizado_em)
+    const { data: assinatura, error: erroAssinatura } = await supabase
+      .from('assinaturas')
+      .select('*')
+      .eq('asaas_subscription_id', subscriptionId)
+      .maybeSingle();
+
+    if (erroAssinatura || !assinatura) {
+      return new Response(JSON.stringify({ ok: true, ignorado: true, motivo: 'assinatura não encontrada' }), { status: 200 });
+    }
+
     let novoStatus: string | null = null;
+    let confirmado = false;
 
     switch (evento) {
       case 'PAYMENT_CONFIRMED':
       case 'PAYMENT_RECEIVED':
         novoStatus = 'ativa';
+        confirmado = true;
         break;
       case 'PAYMENT_OVERDUE':
-        novoStatus = 'expirada';
-        break;
       case 'PAYMENT_DELETED':
       case 'PAYMENT_REFUNDED':
       case 'SUBSCRIPTION_DELETED':
@@ -47,31 +60,93 @@ serve(async (req) => {
         novoStatus = null;
     }
 
-    const updatePayload: Record<string, unknown> = {
-      pagamento_status: evento,
-      updated_at: new Date().toISOString(),
+    // Update em `assinaturas` -> só colunas que EXISTEM nessa tabela
+    const updateAssinatura: Record<string, unknown> = {
+      atualizado_em: new Date().toISOString(),
     };
 
-    // ✅ só atualiza campos de pagamento se o evento realmente for de payment
     if (pagamento) {
-      updatePayload.cobranca_id = pagamento.id ?? null;
-      updatePayload.ultimo_pagamento_em = pagamento.paymentDate ?? null;
-      updatePayload.vencimento_em = pagamento.dueDate ?? null;
-      updatePayload.valor_pago = pagamento.value ?? null;
+      updateAssinatura.vencimento_em = pagamento.dueDate ?? null;
+      if (confirmado) {
+        updateAssinatura.ultimo_pagamento_em = pagamento.paymentDate ?? new Date().toISOString();
+      }
     }
 
     if (novoStatus) {
-      updatePayload.status = novoStatus;
+      updateAssinatura.status = novoStatus;
     }
 
-    const { error } = await supabase
-      .from('licencas')
-      .update(updatePayload)
-      .eq('asaas_subscription_id', subscriptionId);
+    const { error: erroUpdateAssinatura } = await supabase
+      .from('assinaturas')
+      .update(updateAssinatura)
+      .eq('id', assinatura.id);
 
-    if (error) {
-      console.error('Erro ao atualizar licença via webhook:', error);
-      return new Response(JSON.stringify({ ok: false, error }), { status: 500 });
+    if (erroUpdateAssinatura) {
+      console.error('Erro ao atualizar assinatura via webhook:', erroUpdateAssinatura);
+      return new Response(JSON.stringify({ ok: false, error: erroUpdateAssinatura }), { status: 500 });
+    }
+
+    // 2. Se pagamento CONFIRMADO -> promove os dados para `licencas`
+    if (confirmado) {
+      // Busca o plano COMPLETO (assinaturas não guarda regras do plano)
+      const { data: plano, error: erroPlano } = await supabase
+        .from('planos')
+        .select('nome, descricao, valor, duracao_dias, usa_periodo, usa_limite_lotes, limite_lotes, usa_limite_frangos, limite_frangos')
+        .eq('id', assinatura.plano_id)
+        .maybeSingle();
+
+      if (erroPlano || !plano) {
+        console.error('Erro ao buscar plano para promoção de licença:', erroPlano);
+        return new Response(JSON.stringify({ ok: false, error: erroPlano ?? 'Plano não encontrado' }), { status: 500 });
+      }
+
+      const hoje = new Date();
+      let dataFinal: string | null = null;
+      if (plano.usa_periodo) {
+        const dias = plano.duracao_dias ?? 30;
+        const dataExpiracao = new Date();
+        dataExpiracao.setDate(dataExpiracao.getDate() + dias);
+        dataFinal = dataExpiracao.toISOString().split('T')[0];
+      }
+
+      const { error: erroLicenca } = await supabase
+        .from('licencas')
+        .update({
+          status: 'ativa',
+          plano_id: assinatura.plano_id,
+          plano_nome: plano.nome,
+          plano_descricao: plano.descricao,
+          asaas_customer_id: assinatura.asaas_customer_id,
+          asaas_subscription_id: assinatura.asaas_subscription_id,
+          cobranca_id: pagamento?.id ?? null,
+          pagamento_status: evento,
+          valor_pago: pagamento?.value ?? plano.valor,
+          usa_periodo: plano.usa_periodo,
+          usa_limite_lotes: plano.usa_limite_lotes,
+          limite_lotes: plano.limite_lotes,
+          usa_limite_frangos: plano.usa_limite_frangos,
+          limite_frangos: plano.limite_frangos,
+          data_inicial: hoje.toISOString().split('T')[0],
+          data_final: dataFinal,
+          expira_em: dataFinal,
+          vencimento_em: pagamento?.dueDate ?? null,
+          ultimo_pagamento_em: pagamento?.paymentDate ?? null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('empresa_id', assinatura.empresa_id);
+
+      if (erroLicenca) {
+        console.error('Erro ao promover assinatura para licença:', erroLicenca);
+        return new Response(JSON.stringify({ ok: false, error: erroLicenca }), { status: 500 });
+      }
+
+      // Marca outras assinaturas ativas antigas dessa empresa como substituídas
+      await supabase
+        .from('assinaturas')
+        .update({ status: 'substituida', atualizado_em: new Date().toISOString() })
+        .eq('empresa_id', assinatura.empresa_id)
+        .neq('id', assinatura.id)
+        .eq('status', 'ativa');
     }
 
     return new Response(JSON.stringify({ ok: true }), { status: 200 });

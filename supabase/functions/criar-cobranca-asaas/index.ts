@@ -13,6 +13,7 @@ const corsHeaders = {
   'Content-Type': 'application/json',
 };
 
+const DIAS_JANELA_RENOVACAO = 10;
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -20,18 +21,18 @@ serve(async (req) => {
   }
 
   try {
-    const { empresaId, planoId, cicloCobranca } = await req.json();
+    const { empresaId, planoId, usuarioId, cicloCobranca, forcar } = await req.json();
 
-    if (!empresaId || !planoId) {
+    if (!empresaId || !planoId || !usuarioId) {
       return new Response(
-        JSON.stringify({ error: 'empresaId e planoId são obrigatórios' }),
+        JSON.stringify({ error: 'empresaId, planoId e usuarioId são obrigatórios' }),
         { status: 400, headers: corsHeaders }
       );
     }
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-    // 1. Busca dados da empresa
+    // 1. Empresa
     const { data: empresa, error: erroEmpresa } = await supabase
       .from('empresas')
       .select('id, nome, cpf_cnpj, email, telefone, tipopessoa')
@@ -45,7 +46,6 @@ serve(async (req) => {
       );
     }
 
-    // Valida CPF/CNPJ antes de qualquer chamada à Asaas
     const cpfCnpjLimpo = (empresa.cpf_cnpj ?? '').replace(/\D/g, '');
     if (cpfCnpjLimpo.length !== 11 && cpfCnpjLimpo.length !== 14) {
       return new Response(
@@ -63,10 +63,10 @@ serve(async (req) => {
       );
     }
 
-    // 2. Busca dados do plano
+    // 2. Plano
     const { data: plano, error: erroPlano } = await supabase
       .from('planos')
-      .select('id, nome, descricao, valor, duracao_dias, usa_periodo, usa_limite_lotes, limite_lotes, usa_limite_frangos, limite_frangos')
+      .select('id, nome, descricao, valor, duracao_dias, usa_periodo, usa_limite_lotes, limite_lotes, usa_limite_frangos, limite_frangos, eh_trial')
       .eq('id', planoId)
       .single();
 
@@ -77,34 +77,60 @@ serve(async (req) => {
       );
     }
 
-    // 3. Busca a licença existente da empresa
-    const { data: licencaExistente, error: erroLicencaExistente } = await supabase
+    // 3. Licença atual da empresa (fonte da verdade para o app)
+    const { data: licencaAtual, error: erroLicenca } = await supabase
       .from('licencas')
-      .select('id, asaas_customer_id, asaas_subscription_id')
+      .select('id, status, data_final, expira_em, asaas_customer_id')
       .eq('empresa_id', empresa.id)
       .maybeSingle();
 
-    if (erroLicencaExistente) {
+    if (erroLicenca) {
       return new Response(
-        JSON.stringify({ error: 'Erro ao buscar licença da empresa', detalhes: erroLicencaExistente }),
+        JSON.stringify({ error: 'Erro ao buscar licença da empresa', detalhes: erroLicenca }),
         { status: 400, headers: corsHeaders }
       );
     }
 
-    if (!licencaExistente) {
+    if (!licencaAtual) {
       return new Response(
         JSON.stringify({ error: 'Licença da empresa não encontrada. Verifique o cadastro inicial.' }),
         { status: 404, headers: corsHeaders }
       );
     }
 
-    let asaasCustomerId = licencaExistente.asaas_customer_id ?? null;
+    // 3.1 Aviso de licença ativa fora da janela de renovação (10 dias)
+    const dataReferencia = licencaAtual.data_final ?? licencaAtual.expira_em;
+    if (licencaAtual.status === 'ativa' && dataReferencia && !forcar) {
+      const hoje = new Date();
+      const dataFinal = new Date(dataReferencia);
+      const diasRestantes = Math.ceil((dataFinal.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24));
 
-    // ✅ 3.1 Se já existe uma subscription vinculada, verifica se ainda está válida
-    //     e reaproveita o pagamento pendente (evita duplicar boletos/pix)
-    if (licencaExistente.asaas_subscription_id) {
+      if (diasRestantes > DIAS_JANELA_RENOVACAO) {
+        return new Response(
+          JSON.stringify({
+            avisoLicencaAtiva: true,
+            dataFinal: dataReferencia,
+            diasRestantes,
+          }),
+          { status: 200, headers: corsHeaders }
+        );
+      }
+    }
+
+    // 4. Já existe assinatura PENDENTE (aguardando pagamento) para esta empresa?
+    //    -> Reimprime o boleto/Pix existente, sem criar cobrança duplicada.
+    const { data: assinaturaPendente } = await supabase
+      .from('assinaturas')
+      .select('id, asaas_subscription_id, plano_id')
+      .eq('empresa_id', empresa.id)
+      .eq('status', 'pendente')
+      .order('criado_em', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (assinaturaPendente?.asaas_subscription_id) {
       const subCheckResp = await fetch(
-        `${ASAAS_API_URL}/subscriptions/${licencaExistente.asaas_subscription_id}`,
+        `${ASAAS_API_URL}/subscriptions/${assinaturaPendente.asaas_subscription_id}`,
         { headers: { access_token: ASAAS_API_KEY } }
       );
 
@@ -120,10 +146,10 @@ serve(async (req) => {
           const pagamentoPendente = pagamentosExistentes?.data?.[0];
 
           if (pagamentoPendente) {
-            // Já existe cobrança pendente: retorna sem criar nada novo
+            // ✅ Reimpressão: retorna o mesmo boleto/Pix já gerado
             return new Response(
               JSON.stringify({
-                licenca: licencaExistente,
+                reimpressao: true,
                 linkCheckout: pagamentoPendente.invoiceUrl,
                 asaasSubscriptionId: subExistente.id,
               }),
@@ -134,13 +160,15 @@ serve(async (req) => {
       }
     }
 
-    // 4. Verifica/cria cliente na Asaas
+    // 5. Cliente na Asaas (customer_id fica salvo na licença, é reaproveitado entre planos)
+    let asaasCustomerId = licencaAtual.asaas_customer_id ?? null;
+
     if (asaasCustomerId) {
       const checkResp = await fetch(`${ASAAS_API_URL}/customers/${asaasCustomerId}`, {
         headers: { access_token: ASAAS_API_KEY },
       });
       if (!checkResp.ok) {
-        asaasCustomerId = null; // força recriação
+        asaasCustomerId = null;
       }
     }
 
@@ -181,7 +209,7 @@ serve(async (req) => {
       }
     }
 
-    // 5. Cria a assinatura recorrente na Asaas (só chega aqui se NÃO havia pagamento pendente)
+    // 6. Cria a nova assinatura recorrente na Asaas
     const hoje = new Date();
     const proximoVencimento = new Date(hoje);
     proximoVencimento.setDate(hoje.getDate() + 3);
@@ -211,7 +239,7 @@ serve(async (req) => {
       );
     }
 
-    // 6. Busca o link de checkout do primeiro pagamento gerado
+    // 7. Busca o link de checkout do primeiro pagamento gerado
     const pagamentosResp = await fetch(
       `${ASAAS_API_URL}/payments?subscription=${assinaturaAsaas.id}`,
       { headers: { access_token: ASAAS_API_KEY } }
@@ -220,52 +248,47 @@ serve(async (req) => {
     const primeiroPagamento = pagamentos?.data?.[0];
     const linkCheckout = primeiroPagamento?.invoiceUrl ?? null;
 
-    // 7. Calcula data de expiração
-    let expiraEm: string | null = null;
-    if (plano.usa_periodo && plano.duracao_dias) {
-      const dataExpiracao = new Date();
-      dataExpiracao.setDate(dataExpiracao.getDate() + plano.duracao_dias);
-      expiraEm = dataExpiracao.toISOString().split('T')[0];
-    }
-
-    // 8. Atualiza a licença existente
-    const { data: licencaAtualizada, error: erroUpdate } = await supabase
+    // 8. Persiste asaas_customer_id na licença (reaproveitável), sem tocar no restante
+    await supabase
       .from('licencas')
-      .update({
+      .update({ asaas_customer_id: asaasCustomerId, updated_at: new Date().toISOString() })
+      .eq('empresa_id', empresa.id);
+
+    // 9. Marca qualquer assinatura pendente antiga como substituída (segurança)
+    await supabase
+      .from('assinaturas')
+      .update({ status: 'substituida', atualizado_em: new Date().toISOString() })
+      .eq('empresa_id', empresa.id)
+      .eq('status', 'pendente');
+
+    // 10. Cria a NOVA linha em `assinaturas` -> SOMENTE colunas que existem na tabela real:
+    //     id, usuario_id, plano_id, asaas_customer_id, asaas_subscription_id, status,
+    //     criado_em, empresa_id, ultimo_pagamento_em, vencimento_em, atualizado_em
+    const { data: novaAssinatura, error: erroInsert } = await supabase
+      .from('assinaturas')
+      .insert({
+        usuario_id: usuarioId,
+        empresa_id: empresa.id,
         plano_id: plano.id,
-        plano_nome: plano.nome,
-        plano_descricao: plano.descricao,
-        status: 'aguardando_pagamento',
         asaas_customer_id: asaasCustomerId,
         asaas_subscription_id: assinaturaAsaas.id,
-        cobranca_id: primeiroPagamento?.id ?? null,
-        pagamento_status: 'PENDING',
-        valor_pago: plano.valor,
-        usa_periodo: plano.usa_periodo,
-        usa_limite_lotes: plano.usa_limite_lotes,
-        limite_lotes: plano.limite_lotes,
-        usa_limite_frangos: plano.usa_limite_frangos,
-        limite_frangos: plano.limite_frangos,
-        data_inicial: new Date().toISOString().split('T')[0],
-        data_final: expiraEm,
-        expira_em: expiraEm,
+        status: 'pendente',
         vencimento_em: primeiroPagamento?.dueDate ?? null,
-        updated_at: new Date().toISOString(),
+        criado_em: new Date().toISOString(),
       })
-      .eq('empresa_id', empresa.id)
       .select()
       .single();
 
-    if (erroUpdate) {
+    if (erroInsert) {
       return new Response(
-        JSON.stringify({ error: 'Erro ao atualizar licença no banco', detalhes: erroUpdate }),
+        JSON.stringify({ error: 'Erro ao registrar assinatura pendente', detalhes: erroInsert }),
         { status: 400, headers: corsHeaders }
       );
     }
 
     return new Response(
       JSON.stringify({
-        licenca: licencaAtualizada,
+        assinatura: novaAssinatura,
         linkCheckout,
         asaasSubscriptionId: assinaturaAsaas.id,
       }),

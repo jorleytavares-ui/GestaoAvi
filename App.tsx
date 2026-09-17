@@ -4,18 +4,6 @@ import { View, Text } from 'react-native';
 import { useFonts } from 'expo-font';
 import "./global.css";
 
-import {
-  ZillaSlab_600SemiBold,
-  ZillaSlab_700Bold,
-} from '@expo-google-fonts/zilla-slab';
-import {
-  WorkSans_400Regular,
-  WorkSans_500Medium,
-  WorkSans_600SemiBold,
-  WorkSans_700Bold,
-} from '@expo-google-fonts/work-sans';
-import { IBMPlexMono_600SemiBold } from '@expo-google-fonts/ibm-plex-mono';
-
 import { RootNavigator } from './src/navigation/RootNavigator';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthProvider, useAuth } from './src/auth/AuthContext';
@@ -49,13 +37,13 @@ function AppInterno() {
 
 export default function App() {
   const [fontsLoaded, fontError] = useFonts({
-    ZillaSlab_600SemiBold,
-    ZillaSlab_700Bold,
-    WorkSans_400Regular,
-    WorkSans_500Medium,
-    WorkSans_600SemiBold,
-    WorkSans_700Bold,
-    IBMPlexMono_600SemiBold,
+    ZillaSlab_600SemiBold: require('./assets/fonts/ZillaSlab_600SemiBold.ttf'),
+    ZillaSlab_700Bold: require('./assets/fonts/ZillaSlab_700Bold.ttf'),
+    WorkSans_400Regular: require('./assets/fonts/WorkSans_400Regular.ttf'),
+    WorkSans_500Medium: require('./assets/fonts/WorkSans_500Medium.ttf'),
+    WorkSans_600SemiBold: require('./assets/fonts/WorkSans_600SemiBold.ttf'),
+    WorkSans_700Bold: require('./assets/fonts/WorkSans_700Bold.ttf'),
+    IBMPlexMono_600SemiBold: require('./assets/fonts/IBMPlexMono_600SemiBold.ttf'),
   });
 
   console.log('fontsLoaded:', fontsLoaded, 'fontError:', fontError);

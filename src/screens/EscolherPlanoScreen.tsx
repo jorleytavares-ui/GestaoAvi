@@ -12,6 +12,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { listarPlanosAtivos } from '../services/planos';
 import { useNavigation } from '@react-navigation/native';
 import { useLicenca } from '../hooks/useLicenca';
+import { usePerfil } from '../hooks/usePerfil';
+import { podeGerenciarPlano } from '../constants/papeis';
 
 interface Plano {
   id: string;
@@ -43,6 +45,19 @@ export function EscolherPlanoScreen() {
   const [planoSelecionado, setPlanoSelecionado] = useState<string | null>(null);
   const navigation = useNavigation<any>();
   const { licenca, carregando: carregandoLicenca } = useLicenca();
+  const { perfil, carregandoPerfil } = usePerfil();
+
+  // ✅ Guarda de acesso: só papéis 1, 3 e 7 podem entrar nesta tela
+  useEffect(() => {
+    if (!carregandoPerfil && !podeGerenciarPlano(perfil?.papelId)) {
+      Alert.alert('Acesso restrito', 'Você não tem permissão para gerenciar o plano.');
+      if (navigation.canGoBack()) {
+        navigation.goBack();
+      } else {
+        navigation.navigate('Home');
+      }
+    }
+  }, [carregandoPerfil, perfil?.papelId]);
 
   useEffect(() => {
     carregarPlanos();
@@ -75,6 +90,31 @@ export function EscolherPlanoScreen() {
 
   function confirmarPlano(plano: Plano) {
     setPlanoSelecionado(plano.id);
+
+    const licencaAtiva = licenca?.status === 'ativa';
+    const dataReferencia = licenca?.data_final ?? licenca?.expira_em;
+
+    if (licencaAtiva && dataReferencia) {
+      const hoje = new Date();
+      const dataFinal = new Date(dataReferencia);
+      const diasRestantes = Math.ceil((dataFinal.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24));
+
+      if (diasRestantes > 10) {
+        Alert.alert(
+          'Licença ativa',
+          `Você já possui uma licença ativa até ${formatarData(dataReferencia)}. Deseja mesmo gerar uma nova cobrança de troca de plano?`,
+          [
+            { text: 'Cancelar', style: 'cancel' },
+            {
+              text: 'Confirmar',
+              onPress: () => navigation.navigate('Checkout', { plano, forcar: true }),
+            },
+          ]
+        );
+        return;
+      }
+    }
+
     navigation.navigate('Checkout', { plano });
   }
 
@@ -152,6 +192,12 @@ export function EscolherPlanoScreen() {
           licenca.pagamento_status === 'PAYMENT_OVERDUE') && (
           <Text style={styles.avisoAtraso}>⚠️ Pagamento em atraso</Text>
         )}
+
+        {licenca.status === 'pendente' && (
+          <Text style={styles.avisoPendente}>
+            💳 Existe uma cobrança aguardando pagamento. Toque em "Assinar plano" novamente para reimprimir o boleto/Pix.
+          </Text>
+        )}
       </View>
     );
   }
@@ -208,7 +254,7 @@ export function EscolherPlanoScreen() {
     );
   }
 
-  if (carregando) {
+  if (carregando || carregandoPerfil) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#4CAF50" />
@@ -284,6 +330,7 @@ const styles = StyleSheet.create({
   cardAtualValidade: { fontSize: 13, color: '#555', marginTop: 8 },
   cardAtualUso: { fontSize: 13, color: '#555', marginTop: 2 },
   avisoAtraso: { fontSize: 13, color: '#E53935', fontWeight: 'bold', marginTop: 8 },
+  avisoPendente: { fontSize: 13, color: '#FF9800', fontWeight: '600', marginTop: 8 },
   badgeStatus: {
     flexDirection: 'row',
     alignItems: 'center',

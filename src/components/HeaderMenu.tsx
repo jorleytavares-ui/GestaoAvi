@@ -7,13 +7,13 @@ import { useAuth } from '../auth/AuthContext';
 import { usePerfil } from '../hooks/usePerfil';
 import { sincronizarTudo } from '../storage/sync';
 import { getLotes } from '../storage/storage';
-import { podeCadastrarUsuario, podeEditarEmpresa } from '../constants/papeis';
+import { podeCadastrarUsuario, podeEditarEmpresa, podeGerenciarPlano } from '../constants/papeis';
 
 export function HeaderMenu() {
   const [visivel, setVisivel] = useState(false);
   const [sincronizando, setSincronizando] = useState(false);
   const navigation = useNavigation<any>();
-  const { signOut, userId, empresaTipo } = useAuth(); // 👈 empresaTipo adicionado
+  const { signOut, userId, empresaTipo } = useAuth();
   const { perfil, ownerId } = usePerfil();
 
   const isIntegracao = empresaTipo === 'Integracao';
@@ -139,27 +139,37 @@ export function HeaderMenu() {
             )}
 
             {perfil?.papelId === 1 && (
-  <>
-    <View style={styles.separador} />
-    <TouchableOpacity
-      style={styles.item}
-      onPress={() => {
-        setVisivel(false);
-        navigation.navigate('Planos');
-      }}
-    >
-      <Ionicons name="pricetags-outline" size={20} color="#333" />
-      <Text style={styles.itemTexto}>Cad. Planos (Admin)</Text>
-    </TouchableOpacity>
-  </>
-)}
+              <>
+                <View style={styles.separador} />
+                <TouchableOpacity
+                  style={styles.item}
+                  onPress={() => {
+                    setVisivel(false);
+                    navigation.navigate('Planos');
+                  }}
+                >
+                  <Ionicons name="pricetags-outline" size={20} color="#333" />
+                  <Text style={styles.itemTexto}>Cad. Planos (Admin)</Text>
+                </TouchableOpacity>
+              </>
+            )}
 
-<View style={styles.separador} />
-            <TouchableOpacity style={styles.item} onPress={() => navigation.navigate('EscolherPlano')}>
-              <Ionicons name="pricetags-outline" size={20} color="#333" />
-  <Text style={styles.itemTexto}>Meu Plano</Text>
-</TouchableOpacity>
-
+            {/* ✅ "Meu Plano" restrito aos papéis 1 (Admin), 3 (Integrado) e 7 (Gestor) */}
+            {podeGerenciarPlano(perfil?.papelId) && (
+              <>
+                <View style={styles.separador} />
+                <TouchableOpacity
+                  style={styles.item}
+                  onPress={() => {
+                    setVisivel(false);
+                    navigation.navigate('EscolherPlano');
+                  }}
+                >
+                  <Ionicons name="pricetags-outline" size={20} color="#333" />
+                  <Text style={styles.itemTexto}>Meu Plano</Text>
+                </TouchableOpacity>
+              </>
+            )}
 
             {isIntegracao && podeEditarEmpresa(perfil?.papelId) && (
               <>

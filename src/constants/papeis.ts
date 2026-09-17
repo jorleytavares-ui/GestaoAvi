@@ -31,3 +31,14 @@ export const PODE_EDITAR_EMPRESA: PapelId[] = [
 export function podeEditarEmpresa(papelId?: PapelId | null) {
   return !!papelId && PODE_EDITAR_EMPRESA.includes(papelId);
 }
+
+// ✅ Novo: quem pode acessar "Meu Plano" / gerenciar assinatura
+export const PODE_GERENCIAR_PLANO: PapelId[] = [
+  PAPEL_ID.ADMIN,
+  PAPEL_ID.INTEGRADO,
+  PAPEL_ID.GESTOR,
+];
+
+export function podeGerenciarPlano(papelId?: PapelId | null) {
+  return !!papelId && PODE_GERENCIAR_PLANO.includes(papelId);
+}

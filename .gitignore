@@ -15,3 +15,5 @@ ios/Pods/
 android/app/build/
 android/.gradle/
 *.log
+
+.vercel

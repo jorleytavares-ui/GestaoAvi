@@ -1,6 +1,5 @@
 import { Plano } from '../services/planos';
 
-
 export type AuthStackParamList = {
   Login: undefined;
   Cadastro: undefined;
@@ -17,11 +16,8 @@ export type RootStackParamList = {
   SolicitacoesVinculo: undefined;
   Planos: undefined;
   EscolherPlano: undefined;
-  Checkout: { plano: Plano };
-  
+  Checkout: { plano: Plano; forcar?: boolean };
 };
-
-
 
 // src/navigation/types.ts
 export type DetalheLoteTabParamList = {
@@ -37,9 +33,3 @@ export type DetalheLoteTabParamList = {
   Abate: { loteId: string };
   GraficoComparativo: { loteId: string };
 };
-
-
-
-
-
-
