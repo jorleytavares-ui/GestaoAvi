@@ -7,57 +7,37 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Alert,
+  Linking,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { listarPlanosAtivos } from '../services/planos';
-import { useNavigation } from '@react-navigation/native';
-import { useLicenca } from '../hooks/useLicenca';
-import { usePerfil } from '../hooks/usePerfil';
-import { podeGerenciarPlano } from '../constants/papeis';
+import { supabase } from '../lib/supabase'; // ajuste o caminho conforme seu projeto
+
+// ==========================================================
+// 🔧 CONFIGURAÇÕES - Edite aqui os dados de contato
+// ==========================================================
+const CONTATO_WHATSAPP = '5562900000000'; // DDI + DDD + número (sem espaços/símbolos)
+const CONTATO_MENSAGEM_PADRAO = (nomePlano: string) =>
+  `Olá! Gostaria de solicitar um orçamento para o plano "${nomePlano}".`;
+// ==========================================================
 
 interface Plano {
   id: string;
   nome: string;
   descricao: string;
-  valor: number;
-  duracao_dias: number;
-  usa_periodo: boolean;
-  usa_limite_lotes: boolean;
-  limite_lotes: number;
-  usa_limite_frangos: boolean;
-  limite_frangos: number;
+  valor: number | null;
   eh_trial: boolean;
+  usa_periodo: boolean;
+  duracao_dias?: number;
+  usa_limite_lotes: boolean;
+  limite_lotes?: number;
+  usa_limite_frangos: boolean;
+  limite_frangos?: number;
 }
 
-const STATUS_CONFIG: Record<
-  string,
-  { label: string; cor: string; icone: keyof typeof Ionicons.glyphMap }
-> = {
-  trial: { label: 'PERÍODO DE TESTE', cor: '#FF9800', icone: 'time-outline' },
-  ativa: { label: 'ATIVA', cor: '#4CAF50', icone: 'checkmark-circle-outline' },
-  expirada: { label: 'EXPIRADA', cor: '#E53935', icone: 'alert-circle-outline' },
-  pendente: { label: 'PENDENTE', cor: '#FF9800', icone: 'hourglass-outline' },
-};
-
-export function EscolherPlanoScreen() {
+export default function TelaPlanos() {
   const [planos, setPlanos] = useState<Plano[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [planoSelecionado, setPlanoSelecionado] = useState<string | null>(null);
-  const navigation = useNavigation<any>();
-  const { licenca, carregando: carregandoLicenca } = useLicenca();
-  const { perfil, carregandoPerfil } = usePerfil();
-
-  // ✅ Guarda de acesso: só papéis 1, 3 e 7 podem entrar nesta tela
-  useEffect(() => {
-    if (!carregandoPerfil && !podeGerenciarPlano(perfil?.papelId)) {
-      Alert.alert('Acesso restrito', 'Você não tem permissão para gerenciar o plano.');
-      if (navigation.canGoBack()) {
-        navigation.goBack();
-      } else {
-        navigation.navigate('Home');
-      }
-    }
-  }, [carregandoPerfil, perfil?.papelId]);
 
   useEffect(() => {
     carregarPlanos();
@@ -66,156 +46,64 @@ export function EscolherPlanoScreen() {
   async function carregarPlanos() {
     try {
       setCarregando(true);
-      const dados = await listarPlanosAtivos();
-      const planosSemTrial = dados.filter((p: Plano) => !p.eh_trial);
-      setPlanos(planosSemTrial);
-    } catch (e) {
+      const { data, error } = await supabase
+        .from('planos')
+        .select('*')
+        .order('valor', { ascending: true });
+
+      if (error) throw error;
+      setPlanos(data ?? []);
+    } catch (err) {
+      console.error('Erro ao carregar planos:', err);
       Alert.alert('Erro', 'Não foi possível carregar os planos.');
     } finally {
       setCarregando(false);
     }
   }
 
-  function formatarValor(valor: number) {
+  function formatarValor(valor: number | null) {
+    if (valor === null || valor === undefined) return '';
     return valor.toLocaleString('pt-BR', {
       style: 'currency',
       currency: 'BRL',
     });
   }
 
-  function formatarData(data: string | null) {
-    if (!data) return '—';
-    return new Date(data).toLocaleDateString('pt-BR');
-  }
-
   function confirmarPlano(plano: Plano) {
     setPlanoSelecionado(plano.id);
-
-    const licencaAtiva = licenca?.status === 'ativa';
-    const dataReferencia = licenca?.data_final ?? licenca?.expira_em;
-
-    if (licencaAtiva && dataReferencia) {
-      const hoje = new Date();
-      const dataFinal = new Date(dataReferencia);
-      const diasRestantes = Math.ceil((dataFinal.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24));
-
-      if (diasRestantes > 10) {
-        Alert.alert(
-          'Licença ativa',
-          `Você já possui uma licença ativa até ${formatarData(dataReferencia)}. Deseja mesmo gerar uma nova cobrança de troca de plano?`,
-          [
-            { text: 'Cancelar', style: 'cancel' },
-            {
-              text: 'Confirmar',
-              onPress: () => navigation.navigate('Checkout', { plano, forcar: true }),
-            },
-          ]
-        );
-        return;
-      }
-    }
-
-    navigation.navigate('Checkout', { plano });
+    // TODO: integrar com fluxo de checkout/assinatura
+    Alert.alert('Plano selecionado', `Você escolheu o plano "${plano.nome}".`);
   }
 
-  function sair() {
-    if (navigation.canGoBack()) {
-      navigation.goBack();
-    } else {
-      navigation.navigate('Home');
-    }
-  }
+  function solicitarOrcamento(plano: Plano) {
+    const mensagem = CONTATO_MENSAGEM_PADRAO(plano.nome);
+    const url = `https://wa.me/${CONTATO_WHATSAPP}?text=${encodeURIComponent(mensagem)}`;
 
-  function renderLicencaAtual() {
-    if (carregandoLicenca) {
-      return (
-        <View style={styles.cardAtual}>
-          <ActivityIndicator size="small" color="#4CAF50" />
-        </View>
-      );
-    }
-
-    if (!licenca) return null;
-
-    const config = STATUS_CONFIG[licenca.status] ?? {
-      label: licenca.status?.toUpperCase() ?? '—',
-      cor: '#999',
-      icone: 'help-circle-outline',
-    };
-
-    const validade = licenca.usa_periodo
-      ? licenca.data_final ?? licenca.expira_em
-      : licenca.expira_em;
-
-    return (
-      <View style={styles.cardAtual}>
-        <Text style={styles.cardAtualTitulo}>Sua licença atual</Text>
-
-        <View style={styles.linhaTopo}>
-          <Text style={styles.cardAtualNome}>
-            {licenca.plano_nome ?? 'Período de teste'}
-          </Text>
-          <View style={[styles.badgeStatus, { backgroundColor: config.cor }]}>
-            <Ionicons name={config.icone} size={12} color="#fff" />
-            <Text style={styles.badgeStatusTexto}>{config.label}</Text>
-          </View>
-        </View>
-
-        {licenca.plano_descricao && (
-          <Text style={styles.cardAtualDescricao}>{licenca.plano_descricao}</Text>
-        )}
-
-        {licenca.status === 'trial' ? (
-          <Text style={styles.cardAtualValidade}>
-            Início do teste: {formatarData(licenca.trial_inicio)} • {licenca.trial_dias} dias
-          </Text>
-        ) : (
-          validade && (
-            <Text style={styles.cardAtualValidade}>
-              Válido até {formatarData(validade)}
-            </Text>
-          )
-        )}
-
-        {licenca.usa_limite_lotes && licenca.limite_lotes != null && (
-          <Text style={styles.cardAtualUso}>
-            Lotes: {licenca.lotes_gerados}/{licenca.limite_lotes}
-          </Text>
-        )}
-        {licenca.usa_limite_frangos && licenca.limite_frangos != null && (
-          <Text style={styles.cardAtualUso}>
-            Frangos: {licenca.frangos_utilizados ?? 0}/{licenca.limite_frangos}
-          </Text>
-        )}
-
-        {(licenca.pagamento_status === 'OVERDUE' ||
-          licenca.pagamento_status === 'PAYMENT_OVERDUE') && (
-          <Text style={styles.avisoAtraso}>⚠️ Pagamento em atraso</Text>
-        )}
-
-        {licenca.status === 'pendente' && (
-          <Text style={styles.avisoPendente}>
-            💳 Existe uma cobrança aguardando pagamento. Toque em "Assinar plano" novamente para reimprimir o boleto/Pix.
-          </Text>
-        )}
-      </View>
-    );
+    Linking.openURL(url).catch(() => {
+      Alert.alert('Erro', 'Não foi possível abrir o WhatsApp.');
+    });
   }
 
   function renderPlano({ item }: { item: Plano }) {
     const selecionado = planoSelecionado === item.id;
+    const semValorDefinido =
+      !item.eh_trial && (item.valor === null || item.valor === undefined || item.valor === 0);
 
     return (
       <View style={[styles.card, selecionado && styles.cardSelecionado]}>
         <Text style={styles.nome}>{item.nome}</Text>
         <Text style={styles.descricao}>{item.descricao}</Text>
 
-        <Text style={styles.valor}>
-          {formatarValor(item.valor)}
-          {item.usa_periodo && (
-            <Text style={styles.periodo}> /{item.duracao_dias} dias</Text>
-          )}
-        </Text>
+        {semValorDefinido ? (
+          <Text style={styles.valor}>Sob Consulta</Text>
+        ) : (
+          <Text style={styles.valor}>
+            {formatarValor(item.valor)}
+            {item.usa_periodo && (
+              <Text style={styles.periodo}> /{item.duracao_dias} dias</Text>
+            )}
+          </Text>
+        )}
 
         <View style={styles.beneficios}>
           {item.usa_periodo && (
@@ -245,16 +133,23 @@ export function EscolherPlanoScreen() {
         </View>
 
         <TouchableOpacity
-          style={styles.botaoAssinar}
-          onPress={() => confirmarPlano(item)}
+          style={[
+            styles.botaoAssinar,
+            semValorDefinido && styles.botaoOrcamento,
+          ]}
+          onPress={() =>
+            semValorDefinido ? solicitarOrcamento(item) : confirmarPlano(item)
+          }
         >
-          <Text style={styles.botaoAssinarTexto}>Assinar plano</Text>
+          <Text style={styles.botaoAssinarTexto}>
+            {semValorDefinido ? 'Solicitar orçamento' : 'Assinar plano'}
+          </Text>
         </TouchableOpacity>
       </View>
     );
   }
 
-  if (carregando || carregandoPerfil) {
+  if (carregando) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#4CAF50" />
@@ -264,108 +159,103 @@ export function EscolherPlanoScreen() {
 
   return (
     <View style={styles.container}>
-      <TouchableOpacity style={styles.botaoSair} onPress={sair}>
-        <Ionicons name="close-outline" size={22} color="#333" />
-        <Text style={styles.botaoSairTexto}>Sair</Text>
-      </TouchableOpacity>
-
-      <Text style={styles.titulo}>Escolha o seu plano</Text>
-      <Text style={styles.subtitulo}>
-        Selecione o plano ideal para o seu negócio
-      </Text>
-
+      <Text style={styles.titulo}>Escolha seu plano</Text>
       <FlatList
         data={planos}
         keyExtractor={(item) => item.id}
         renderItem={renderPlano}
         contentContainerStyle={styles.lista}
         showsVerticalScrollIndicator={false}
-        ListHeaderComponent={renderLicencaAtual()}
-        ListEmptyComponent={
-          <Text style={styles.vazio}>Nenhum plano disponível.</Text>
-        }
       />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F5F5F5', paddingTop: 20 },
-  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  botaoSair: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'flex-end',
-    paddingHorizontal: 16,
-    marginBottom: 8,
-    gap: 4,
+  container: {
+    flex: 1,
+    backgroundColor: '#f5f5f5',
+    paddingTop: 16,
   },
-  botaoSairTexto: { fontSize: 14, color: '#333', fontWeight: '600' },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f5f5f5',
+  },
   titulo: {
     fontSize: 22,
     fontWeight: 'bold',
     textAlign: 'center',
-    color: '#333',
-  },
-  subtitulo: {
-    fontSize: 14,
-    textAlign: 'center',
-    color: '#777',
     marginBottom: 16,
+    color: '#222',
   },
-  lista: { paddingHorizontal: 16, paddingBottom: 32 },
-
-  cardAtual: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: '#E0E0E0',
+  lista: {
+    paddingHorizontal: 16,
+    paddingBottom: 32,
   },
-  cardAtualTitulo: { fontSize: 12, color: '#999', marginBottom: 6, textTransform: 'uppercase' },
-  linhaTopo: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  cardAtualNome: { fontSize: 17, fontWeight: 'bold', color: '#222', flexShrink: 1 },
-  cardAtualDescricao: { fontSize: 13, color: '#777', marginTop: 4 },
-  cardAtualValidade: { fontSize: 13, color: '#555', marginTop: 8 },
-  cardAtualUso: { fontSize: 13, color: '#555', marginTop: 2 },
-  avisoAtraso: { fontSize: 13, color: '#E53935', fontWeight: 'bold', marginTop: 8 },
-  avisoPendente: { fontSize: 13, color: '#FF9800', fontWeight: '600', marginTop: 8 },
-  badgeStatus: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  badgeStatusTexto: { color: '#fff', fontSize: 11, fontWeight: 'bold' },
-
   card: {
     backgroundColor: '#fff',
     borderRadius: 12,
     padding: 20,
     marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#E0E0E0',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
   },
   cardSelecionado: {
-    borderColor: '#4CAF50',
     borderWidth: 2,
+    borderColor: '#4CAF50',
   },
-  nome: { fontSize: 18, fontWeight: 'bold', color: '#222' },
-  descricao: { fontSize: 13, color: '#777', marginTop: 4, marginBottom: 12 },
-  valor: { fontSize: 26, fontWeight: 'bold', color: '#4CAF50' },
-  periodo: { fontSize: 13, fontWeight: 'normal', color: '#999' },
-  beneficios: { marginTop: 14, marginBottom: 16 },
-  beneficioItem: { flexDirection: 'row', alignItems: 'center', marginBottom: 6 },
-  beneficioTexto: { marginLeft: 8, fontSize: 14, color: '#444' },
+  nome: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#222',
+    marginBottom: 4,
+  },
+  descricao: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 12,
+  },
+  valor: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#4CAF50',
+    marginBottom: 12,
+  },
+  periodo: {
+    fontSize: 14,
+    fontWeight: 'normal',
+    color: '#666',
+  },
+  beneficios: {
+    marginBottom: 16,
+  },
+  beneficioItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  beneficioTexto: {
+    marginLeft: 8,
+    fontSize: 14,
+    color: '#444',
+  },
   botaoAssinar: {
     backgroundColor: '#4CAF50',
     borderRadius: 8,
     paddingVertical: 12,
     alignItems: 'center',
   },
-  botaoAssinarTexto: { color: '#fff', fontWeight: 'bold', fontSize: 15 },
-  vazio: { textAlign: 'center', color: '#999', marginTop: 40 },
+  botaoOrcamento: {
+    backgroundColor: '#2196F3',
+  },
+  botaoAssinarTexto: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 16,
+  },
 });
