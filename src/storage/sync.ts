@@ -122,11 +122,16 @@ export async function enviarLotesPendentes(
           continue;
         }
 
-        const { data: atual } = await supabase
-          .from('lotes')
-          .select('owner_id, liberado, liberado_em, liberado_por, perfis:owner_id (nome)')
-          .eq('id', lote.id)
-          .single();
+        const { data: atual, error: fetchError } = await supabase
+  .from('lotes')
+  .select('owner_id, liberado, liberado_em, liberado_por, perfis!owner_id(nome)')
+  .eq('id', lote.id)
+  .single();
+
+if (fetchError) {
+  console.log('Erro ao buscar dados atualizados do lote:', fetchError.message);
+}
+
 
         const ownerNome = (atual as any)?.perfis?.nome ?? null;
 

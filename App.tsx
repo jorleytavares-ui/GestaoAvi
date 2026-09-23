@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { View, Text } from 'react-native';
 import { useFonts } from 'expo-font';
+import * as Updates from 'expo-updates';
 import "./global.css";
 
 import { RootNavigator } from './src/navigation/RootNavigator';
@@ -45,6 +46,23 @@ export default function App() {
     WorkSans_700Bold: require('./assets/fonts/WorkSans_700Bold.ttf'),
     IBMPlexMono_600SemiBold: require('./assets/fonts/IBMPlexMono_600SemiBold.ttf'),
   });
+
+  // ✅ Checa e aplica atualizações OTA na mesma sessão (sem precisar reabrir 2x)
+  useEffect(() => {
+    async function checarAtualizacao() {
+      if (__DEV__) return; // não faz nada no Expo Go / modo dev
+      try {
+        const update = await Updates.checkForUpdateAsync();
+        if (update.isAvailable) {
+          await Updates.fetchUpdateAsync();
+          await Updates.reloadAsync();
+        }
+      } catch (e) {
+        console.log('Erro ao checar atualização:', e);
+      }
+    }
+    checarAtualizacao();
+  }, []);
 
   console.log('fontsLoaded:', fontsLoaded, 'fontError:', fontError);
 
