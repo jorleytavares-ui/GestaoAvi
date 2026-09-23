@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Alert, TouchableOpacity, Text, View, StyleSheet, ScrollView } from 'react-native';
+import { TouchableOpacity, Text, View, StyleSheet, ScrollView } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Weight, TrendingUp, Bird, Wheat, Calendar, Pencil } from 'lucide-react-native';
 
@@ -11,6 +11,7 @@ import { COLORS } from '../theme/colors';
 import { useAuth } from '../auth/AuthContext';
 import { useIndicadoresLote } from '../hooks/useIndicadoresLote';
 import { fmt } from '../utils/calculations';
+import { alertaUniversal } from '../utils/alerta';
 
 import { ResumoTab } from './detalhe/ResumoTab';
 import { RacaoTab } from './detalhe/RacaoTab';
@@ -64,18 +65,17 @@ function AvisoLoteLiberado({
   if (!podeAssumirLote(lote, usuarioId)) return null;
 
   async function handleAssumir() {
-  setCarregando(true);
-  try {
-    await assumirLote(lote.id);
-    await onAssumido(); // 👈 espera recarregar antes de seguir
-    Alert.alert('Sucesso', 'Você assumiu o lote com sucesso!'); // 👈 adicionar
-  } catch (e: any) {
-    Alert.alert('Não foi possível assumir o lote', e.message);
-  } finally {
-    setCarregando(false);
+    setCarregando(true);
+    try {
+      await assumirLote(lote.id);
+      await onAssumido(); // 👈 espera recarregar antes de seguir
+      alertaUniversal('Sucesso', 'Você assumiu o lote com sucesso!');
+    } catch (e: any) {
+      alertaUniversal('Não foi possível assumir o lote', e.message);
+    } finally {
+      setCarregando(false);
+    }
   }
-}
-
 
   return (
     <View style={styles.aviso}>
@@ -106,11 +106,9 @@ export function DetalheLoteScreen({ route, navigation }: Props) {
   const [liberandoOtimista, setLiberandoOtimista] = useState(false);
 
   const totalAlojado = lote?.galpoes.reduce(
-  (s, g) => s + (Number(g.quantidadeAlojada) || 0),
-  0
-) ?? 0;
-
-  
+    (s, g) => s + (Number(g.quantidadeAlojada) || 0),
+    0
+  ) ?? 0;
 
   const AbaAtivaComp = ABAS.find(a => a.key === abaAtiva)?.Comp ?? ResumoTab;
   const loteLiberado = liberandoOtimista || !!lote?.liberado;
@@ -124,77 +122,73 @@ export function DetalheLoteScreen({ route, navigation }: Props) {
         {lote && (
           <View style={styles.cardTopo}>
             <View style={styles.linha}>
-  <View>
-    <Text style={styles.nomeLote}>{`Lote ${lote.numero}`}</Text>
+              <View>
+                <Text style={styles.nomeLote}>{`Lote ${lote.numero}`}</Text>
 
-    {(lote as any).empresaNome && (
-      <Text style={styles.integradoTexto}>
-        Integrado:{' '}
-        <Text style={styles.integradoValor}>{(lote as any).empresaNome}</Text>
-      </Text>
-    )}
-  </View>
+                {(lote as any).empresaNome && (
+                  <Text style={styles.integradoTexto}>
+                    Integrado:{' '}
+                    <Text style={styles.integradoValor}>{(lote as any).empresaNome}</Text>
+                  </Text>
+                )}
+              </View>
 
-  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-    {user && lote.status !== 'encerrado' && (
-  !lote.ownerId || lote.ownerId === user.id || lote.liberado
-) && (
-  <TouchableOpacity
-    onPress={() => navigation.navigate('NovoLote', { loteId: lote.id })}
-    style={styles.botaoEditar}
-  >
-    <Pencil size={16} color={COLORS.primary} />
-  </TouchableOpacity>
-)}
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                {user && lote.status !== 'encerrado' && (
+                  !lote.ownerId || lote.ownerId === user.id || lote.liberado
+                ) && (
+                  <TouchableOpacity
+                    onPress={() => navigation.navigate('NovoLote', { loteId: lote.id })}
+                    style={styles.botaoEditar}
+                  >
+                    <Pencil size={16} color={COLORS.primary} />
+                  </TouchableOpacity>
+                )}
 
-
-    <View
-      style={[
-        styles.badgeStatus,
-        { borderColor: lote.status === 'encerrado' ? COLORS.inkSoft : COLORS.primary },
-      ]}
-    >
-      <Text
-        style={[
-          styles.badgeStatusText,
-          { color: lote.status === 'encerrado' ? COLORS.inkSoft : COLORS.primary },
-        ]}
-      >
-        {lote.status === 'encerrado' ? 'ENCERRADO' : 'ATIVO'}
-      </Text>
-    </View>
-  </View>
-</View>
-
+                <View
+                  style={[
+                    styles.badgeStatus,
+                    { borderColor: lote.status === 'encerrado' ? COLORS.inkSoft : COLORS.primary },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.badgeStatusText,
+                      { color: lote.status === 'encerrado' ? COLORS.inkSoft : COLORS.primary },
+                    ]}
+                  >
+                    {lote.status === 'encerrado' ? 'ENCERRADO' : 'ATIVO'}
+                  </Text>
+                </View>
+              </View>
+            </View>
 
             <Text style={styles.subInfo}>
               {[lote.linhagem, (lote as any).sexagem].filter(Boolean).join(' · ')}
             </Text>
 
             <Text style={styles.responsavel}>
-  {loteLiberado || !lote.ownerId ? (
-    'Lote livre'
-  ) : (
-    <>
-      Resp:{' '}
-      <Text style={styles.responsavelValor}>
-        {lote.ownerNome || 'Usuário não identificado'}
-      </Text>
-    </>
-  )}
-</Text>
+              {loteLiberado || !lote.ownerId ? (
+                'Lote livre'
+              ) : (
+                <>
+                  Resp:{' '}
+                  <Text style={styles.responsavelValor}>
+                    {lote.ownerNome || 'Usuário não identificado'}
+                  </Text>
+                </>
+              )}
+            </Text>
 
-{/* 👇 NOVO: Nº da granja (vem de data.nGranja) */}
-{(lote as any).nGranja !== undefined && (
-  <View style={styles.linhaInfo}>
-    <Text style={styles.infoLabel}>Nº da granja</Text>
-    <Text style={styles.infoValor}>{(lote as any).nGranja}</Text>
-  </View>
-)}
+            {/* 👇 NOVO: Nº da granja (vem de data.nGranja) */}
+            {(lote as any).nGranja !== undefined && (
+              <View style={styles.linhaInfo}>
+                <Text style={styles.infoLabel}>Nº da granja</Text>
+                <Text style={styles.infoValor}>{(lote as any).nGranja}</Text>
+              </View>
+            )}
 
-
-
-<View style={styles.divisor} />
+            <View style={styles.divisor} />
 
             <View style={styles.linhaInfo}>
               <Text style={styles.infoLabel}>Data de alojamento</Text>
@@ -226,38 +220,37 @@ export function DetalheLoteScreen({ route, navigation }: Props) {
           />
         )}
 
-         {lote && user && lote.ownerId === user.id && !loteLiberado && (
-  <TouchableOpacity
-    style={styles.botaoLiberar}
-    onPress={() => {
-      Alert.alert(
-        'Liberar lote',
-        'Tem certeza que deseja liberar este lote para outro usuário?',
-        [
-          { text: 'Cancelar', style: 'cancel' },
-          {
-            text: 'Liberar',
-            style: 'destructive',
-            onPress: async () => {
-              try {
-                setLiberandoOtimista(true); // 👈 oculta o botão imediatamente
-                await liberarLote(lote.id);
-                await recarregar();
-                Alert.alert('Sucesso', 'Lote liberado com sucesso!');
-              } catch (e: any) {
-                setLiberandoOtimista(false); // 👈 reverte se der erro
-                Alert.alert('Erro ao liberar lote', e.message);
-              }
-            },
-          },
-        ]
-      );
-    }}
-  >
-    <Text style={{ color: '#FFF' }}>Liberar lote para outro usuário</Text>
-  </TouchableOpacity>
-)}
-
+        {lote && user && lote.ownerId === user.id && !loteLiberado && (
+          <TouchableOpacity
+            style={styles.botaoLiberar}
+            onPress={() => {
+              alertaUniversal(
+                'Liberar lote',
+                'Tem certeza que deseja liberar este lote para outro usuário?',
+                [
+                  { text: 'Cancelar', style: 'cancel' },
+                  {
+                    text: 'Liberar',
+                    style: 'destructive',
+                    onPress: async () => {
+                      try {
+                        setLiberandoOtimista(true); // 👈 oculta o botão imediatamente
+                        await liberarLote(lote.id);
+                        await recarregar();
+                        alertaUniversal('Sucesso', 'Lote liberado com sucesso!');
+                      } catch (e: any) {
+                        setLiberandoOtimista(false); // 👈 reverte se der erro
+                        alertaUniversal('Erro ao liberar lote', e.message);
+                      }
+                    },
+                  },
+                ]
+              );
+            }}
+          >
+            <Text style={{ color: '#FFF' }}>Liberar lote para outro usuário</Text>
+          </TouchableOpacity>
+        )}
 
         {/* Grid de índices */}
         {idx && (
@@ -389,11 +382,11 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   botaoEditar: {
-  padding: 4,
-  borderRadius: 6,
-  borderWidth: 1,
-  borderColor: COLORS.line,
-},
+    padding: 4,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: COLORS.line,
+  },
 
   aviso: {
     marginHorizontal: 16,
@@ -451,19 +444,18 @@ const styles = StyleSheet.create({
     color: COLORS.primary,
   },
   integradoTexto: { fontSize: 12.5, color: COLORS.inkSoft, marginTop: 4 },
-integradoValor: { fontWeight: '600', color: COLORS.ink },
+  integradoValor: { fontWeight: '600', color: COLORS.ink },
 
-miniStatsRow: {
-  flexDirection: 'row',
-  gap: 8,
-  marginBottom: 4,
-},
-miniStatItem: { flex: 1 },
+  miniStatsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 4,
+  },
+  miniStatItem: { flex: 1 },
 
   abaContent: {
-  minHeight: 400,
-  paddingHorizontal: 16,
-  paddingBottom: 8,
-},
-
+    minHeight: 400,
+    paddingHorizontal: 16,
+    paddingBottom: 8,
+  },
 });
