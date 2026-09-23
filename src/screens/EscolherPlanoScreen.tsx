@@ -11,6 +11,7 @@ import {
   Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
 import { supabase } from '../lib/supabase';
 
 const CONTATO_WHATSAPP = '5562992938118';
@@ -41,6 +42,7 @@ interface Plano {
 }
 
 export function EscolherPlanoScreen() {
+  const navigation = useNavigation();
   const [planos, setPlanos] = useState<Plano[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
@@ -163,7 +165,13 @@ export function EscolherPlanoScreen() {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.titulo}>Escolha seu plano</Text>
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.botaoVoltar}>
+          <Ionicons name="arrow-back" size={24} color="#222" />
+        </TouchableOpacity>
+        <Text style={styles.titulo}>Escolha seu plano</Text>
+      </View>
+
       <FlatList
         data={planos}
         keyExtractor={(item) => item.id}
@@ -178,7 +186,17 @@ export function EscolherPlanoScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f5f5f5', paddingTop: 16 },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f5f5f5' },
-  titulo: { fontSize: 22, fontWeight: 'bold', textAlign: 'center', marginBottom: 16, color: '#222' },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    marginBottom: 16,
+  },
+  botaoVoltar: {
+    marginRight: 12,
+    padding: 4,
+  },
+  titulo: { fontSize: 22, fontWeight: 'bold', color: '#222', flex: 1 },
   lista: { paddingHorizontal: 16, paddingBottom: 32 },
   card: {
     backgroundColor: '#fff',
