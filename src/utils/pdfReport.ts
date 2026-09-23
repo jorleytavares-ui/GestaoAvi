@@ -1,7 +1,9 @@
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
-import { Alert } from 'react-native';
+import { Alert, Platform } from 'react-native';
 import { computeIndices, daysBetween, todayStr, fmt, fmtDateBR, Lote } from './calculations';
+import { ITENS_AVALIACAO_TECNICA } from './constants';
+
 
 function tabelaGenerica(titulo: string, linhas: string[][]): string {
   if (!linhas.length) return '';
@@ -10,6 +12,18 @@ function tabelaGenerica(titulo: string, linhas: string[][]): string {
     <div class="section">
       <h3>${titulo}</h3>
       <table class="tabela-registros">${rows}</table>
+    </div>
+  `;
+}
+
+function tabelaComHeader(titulo: string, header: string[], linhas: string[][]): string {
+  if (!linhas.length) return '';
+  const headerRow = `<tr>${header.map((h) => `<td class="th">${h}</td>`).join('')}</tr>`;
+  const rows = linhas.map((l) => `<tr>${l.map((c) => `<td>${c}</td>`).join('')}</tr>`).join('');
+  return `
+    <div class="section">
+      <h3>${titulo}</h3>
+      <table class="tabela-registros">${headerRow}${rows}</table>
     </div>
   `;
 }
@@ -79,14 +93,21 @@ export async function exportarRelatorioPdf(lote: Lote) {
     // ---------- Avaliação Técnica ----------
     const linhasAvaliacao = (lote.avaliacoesTecnicas || [])
       .sort((a, b) => a.data.localeCompare(b.data))
-      .map((a) => [
-        fmtDateBR(a.data),
-        nomeGalpao(a.galpaoId),
-        a.uniformidade !== null && a.uniformidade !== undefined ? `${fmt(a.uniformidade, 0)}%` : '—',
-        a.escoreCama ?? '—',
-        a.escoreFezes ?? '—',
-        a.observacoes || '—',
-      ]);
+      .map((a) => {
+        const resumoItens = ITENS_AVALIACAO_TECNICA
+          .filter((it) => a.itens?.[it.chave])
+          .map((it) => `${it.label}: ${a.itens![it.chave]}`)
+          .join(' | ');
+
+        return [
+          fmtDateBR(a.data),
+          nomeGalpao(a.galpaoId),
+          a.hora ?? '—',
+          a.tecnico ?? '—',
+          resumoItens || '—',
+          a.orientacoes ?? '—',
+        ];
+      });
 
     // ---------- Medicamentos Terapêuticos ----------
     const linhasMedicamentos = (lote.medicamentosTerapeuticos || [])
@@ -206,7 +227,11 @@ export async function exportarRelatorioPdf(lote: Lote) {
           ${tabelaGenerica('Pesagens', linhasPesagem)}
           ${tabelaGenerica('Consumo de Ração', linhasRacao)}
           ${tabelaGenerica('Estoque de Ração (Silo / Equipamentos)', linhasEstoque)}
-          ${tabelaGenerica('Avaliações Técnicas', linhasAvaliacao)}
+          ${tabelaComHeader(
+            'Avaliações Técnicas',
+            ['Data', 'Galpão', 'Hora', 'Técnico', 'Itens Avaliados', 'Orientações'],
+            linhasAvaliacao
+          )}
           ${tabelaGenerica('Medicamentos Terapêuticos', linhasMedicamentos)}
           ${tabelaGenerica('Produtos Químicos', linhasQuimicos)}
           ${secaoAbate}
@@ -220,6 +245,13 @@ export async function exportarRelatorioPdf(lote: Lote) {
         </body>
       </html>
     `;
+
+    // ---------- Geração do PDF (com suporte à Web) ----------
+    if (Platform.OS === 'web') {
+      // Na web, printToFileAsync não retorna uri; usamos o diálogo de impressão nativo do navegador
+      await Print.printAsync({ html });
+      return;
+    }
 
     const { uri } = await Print.printToFileAsync({ html });
 
