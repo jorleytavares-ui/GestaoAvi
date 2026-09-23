@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, StyleSheet, ScrollView, Alert, Pressable } from 'react-native';
+import { View, Text, TextInput, StyleSheet, ScrollView, Pressable } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
+import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../theme/colors';
 import { getLoteById, encerrarLote } from '../storage/storage';
 import { todayStr, Lote, Encerramento } from '../utils/calculations';
 import { useAuth } from '../auth/AuthContext';
+import { alertaUniversal } from '../utils/alerta';
 
 interface LinhaGalpao {
   galpaoId: string;
@@ -19,7 +21,7 @@ export function EncerrarForm() {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
   const { loteId } = route.params;
-  const { userId } = useAuth(); // ✅ chamado uma única vez, no topo
+  const { userId } = useAuth();
 
   const [lote, setLote] = useState<Lote | null>(null);
   const [linhas, setLinhas] = useState<LinhaGalpao[]>([]);
@@ -31,7 +33,7 @@ export function EncerrarForm() {
   React.useEffect(() => {
     (async () => {
       if (!userId) return;
-      const l = await getLoteById(userId, loteId); // ✅ usa a variável do topo
+      const l = await getLoteById(userId, loteId);
 
       if (l) {
         setLote(l);
@@ -59,15 +61,30 @@ export function EncerrarForm() {
   const validar = () => {
     for (const l of linhas) {
       if (!l.pesoMedioFinalG || isNaN(Number(l.pesoMedioFinalG))) {
-        Alert.alert('Atenção', `Informe o peso médio final do galpão "${l.nome}".`);
+        alertaUniversal('Atenção', `Informe o peso médio final do galpão "${l.nome}".`);
         return false;
       }
     }
     return true;
   };
 
+  const handleVoltar = () => {
+    alertaUniversal(
+      'Cancelar encerramento',
+      'Deseja realmente desistir do encerramento deste lote? Os dados informados serão perdidos.',
+      [
+        { text: 'Continuar aqui', style: 'cancel' },
+        {
+          text: 'Sim, voltar',
+          style: 'destructive',
+          onPress: () => navigation.goBack(),
+        },
+      ]
+    );
+  };
+
   const handleEncerrar = async () => {
-    if (!lote || !userId) return; // ✅ checa userId
+    if (!lote || !userId) return;
     if (!validar()) return;
     setSalvando(true);
     try {
@@ -84,18 +101,21 @@ export function EncerrarForm() {
         })),
       };
 
-      const resultado = await encerrarLote(userId, loteId, encerramento); // ✅ usa a variável do topo
+      const resultado = await encerrarLote(userId, loteId, encerramento);
 
       if (!resultado) {
-        Alert.alert('Erro', 'Lote não encontrado para encerramento.');
+        alertaUniversal('Erro', 'Lote não encontrado para encerramento.');
         return;
       }
 
-      Alert.alert('Lote encerrado', 'O lote foi encerrado com sucesso.', [
-        { text: 'OK', onPress: () => navigation.navigate('DetalheLote', { loteId, tab: 'Resumo' }) },
+      alertaUniversal('Lote encerrado', 'O lote foi encerrado com sucesso.', [
+        {
+          text: 'OK',
+          onPress: () => navigation.navigate('DetalheLote', { loteId, tab: 'Resumo' }),
+        },
       ]);
     } catch {
-      Alert.alert('Erro', 'Não foi possível encerrar o lote.');
+      alertaUniversal('Erro', 'Não foi possível encerrar o lote.');
     } finally {
       setSalvando(false);
     }
@@ -105,8 +125,14 @@ export function EncerrarForm() {
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: COLORS.bg }} contentContainerStyle={{ padding: 16 }}>
+      <View style={styles.header}>
+        <Pressable onPress={handleVoltar} style={styles.botaoVoltar} hitSlop={10}>
+          <Ionicons name="arrow-back" size={22} color={COLORS.ink} />
+        </Pressable>
+        <Text style={styles.headerTitulo}>Encerrar lote {lote?.numero}</Text>
+      </View>
+
       <View style={styles.card}>
-        <Text style={styles.titulo}>Encerrar lote {lote?.numero}</Text>
         <Text style={styles.subtitulo}>
           Informe os dados de encerramento por galpão. Isso libera a geração do relatório em PDF.
         </Text>
@@ -186,8 +212,10 @@ export function EncerrarForm() {
 }
 
 const styles = StyleSheet.create({
+  header: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
+  botaoVoltar: { padding: 6, marginRight: 8 },
+  headerTitulo: { fontSize: 17, fontWeight: '700', color: COLORS.ink },
   card: { backgroundColor: COLORS.surface, borderWidth: 1, borderColor: COLORS.line, borderRadius: 14, padding: 16 },
-  titulo: { fontSize: 17, fontWeight: '700', color: COLORS.ink, marginBottom: 4 },
   subtitulo: { fontSize: 12, color: COLORS.inkSoft, marginBottom: 16, lineHeight: 17 },
   galpaoBox: { borderWidth: 1, borderColor: COLORS.line, borderRadius: 10, padding: 12, marginBottom: 16, backgroundColor: COLORS.bg },
   galpaoTitulo: { fontSize: 13, fontWeight: '700', color: COLORS.ink, marginBottom: 4 },
