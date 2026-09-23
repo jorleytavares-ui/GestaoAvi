@@ -79,11 +79,14 @@ export async function liberarLote(loteId: string): Promise<void> {
 
   const { data: lote, error: fetchError } = await supabase
     .from('lotes')
-    .select('id, owner_id, liberado')
+    .select('id, owner_id, liberado, status') // 👈 incluir status
     .eq('id', loteId)
     .single();
 
   if (fetchError || !lote) throw new Error('Lote não encontrado.');
+  if (lote.status === 'encerrado') {
+    throw new Error('Não é possível liberar um lote encerrado.'); // 👈 nova validação
+  }
   if (lote.owner_id !== userId) throw new Error('Apenas o proprietário atual pode liberar este lote.');
   if (lote.liberado) throw new Error('Este lote já está liberado.');
 

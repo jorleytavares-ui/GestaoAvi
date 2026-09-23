@@ -1,6 +1,6 @@
 // src/screens/detalhe/ResumoTab.tsx
 import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { AlertTriangle, Weight, Droplets, FileDown, Trash2 } from 'lucide-react-native';
 
@@ -12,6 +12,7 @@ import { useIndicadoresLote } from '../../hooks/useIndicadoresLote';
 import { SimpleSelect } from '../../components/SimpleSelect';
 import { exportarRelatorioPdf } from '../../utils/pdfReport';
 import { useAuth } from '../../auth/AuthContext';
+import { alertaUniversal } from '../../utils/alerta';
 
 const FUNCOES_GERADO_POR = [
   { label: 'Integrado', value: 'Integrado' },
@@ -39,15 +40,14 @@ export function ResumoTab({ route, navigation }: any) {
   if (!lote || !idx) return null;
 
   const handleSalvarGeradoPor = async () => {
-  if (!userId) return;
-  try {
-    await setGeradoPor(userId, lote.id, { nome: nomeGeradoPor.trim(), funcao: funcaoGeradoPor });
-    recarregar();
-  } catch (e: any) {
-    Alert.alert('Erro ao salvar', e.message);
-  }
-};
-
+    if (!userId) return;
+    try {
+      await setGeradoPor(userId, lote.id, { nome: nomeGeradoPor.trim(), funcao: funcaoGeradoPor });
+      recarregar();
+    } catch (e: any) {
+      alertaUniversal('Erro ao salvar', e.message);
+    }
+  };
 
   const handleGerarPdf = async () => {
     setGerandoPdf(true);
@@ -62,29 +62,44 @@ export function ResumoTab({ route, navigation }: any) {
     navigation.navigate('EncerrarForm', { loteId: lote.id });
   };
 
- const handleExcluir = () => {
-  Alert.alert(
-    'Excluir lote',
-    `Tem certeza que deseja excluir o lote ${lote.numero}? Esta ação não pode ser desfeita.`,
-    [
-      { text: 'Cancelar', style: 'cancel' },
-      {
-        text: 'Excluir',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            if (!userId) return;
-            await deleteLoteLocal(userId, lote.id);
-            navigation.navigate('Home');
-          } catch (e: any) {
-            Alert.alert('Erro ao excluir', e.message);
-          }
-        },
-      },
-    ]
-  );
-};
+  const handleExcluir = () => {
+    if (lote.status === 'encerrado') {
+      alertaUniversal(
+        'Ação não permitida',
+        'Não é possível excluir um lote encerrado. Se necessário, entre em contato com o suporte.'
+      );
+      return;
+    }
 
+    if (lote.ownerId && userId && lote.ownerId !== userId) {
+      alertaUniversal(
+        'Ação não permitida',
+        'Apenas o proprietário atual do lote pode excluí-lo.'
+      );
+      return;
+    }
+
+    alertaUniversal(
+      'Excluir lote',
+      `Tem certeza que deseja excluir o lote ${lote.numero}? Esta ação não pode ser desfeita.`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Excluir',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              if (!userId) return;
+              await deleteLoteLocal(userId, lote.id);
+              navigation.navigate('Home');
+            } catch (e: any) {
+              alertaUniversal('Erro ao excluir', e.message);
+            }
+          },
+        },
+      ]
+    );
+  };
 
   // ---------- Destaques diários (por galpão) ----------
   const ultimoPorGalpao = lote.galpoes.map((g) => {

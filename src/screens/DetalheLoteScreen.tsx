@@ -220,37 +220,38 @@ export function DetalheLoteScreen({ route, navigation }: Props) {
           />
         )}
 
-        {lote && user && lote.ownerId === user.id && !loteLiberado && (
-          <TouchableOpacity
-            style={styles.botaoLiberar}
-            onPress={() => {
-              alertaUniversal(
-                'Liberar lote',
-                'Tem certeza que deseja liberar este lote para outro usuário?',
-                [
-                  { text: 'Cancelar', style: 'cancel' },
-                  {
-                    text: 'Liberar',
-                    style: 'destructive',
-                    onPress: async () => {
-                      try {
-                        setLiberandoOtimista(true); // 👈 oculta o botão imediatamente
-                        await liberarLote(lote.id);
-                        await recarregar();
-                        alertaUniversal('Sucesso', 'Lote liberado com sucesso!');
-                      } catch (e: any) {
-                        setLiberandoOtimista(false); // 👈 reverte se der erro
-                        alertaUniversal('Erro ao liberar lote', e.message);
-                      }
-                    },
-                  },
-                ]
-              );
-            }}
-          >
-            <Text style={{ color: '#FFF' }}>Liberar lote para outro usuário</Text>
-          </TouchableOpacity>
-        )}
+        {lote && user && lote.ownerId === user.id && !loteLiberado && lote.status !== 'encerrado' && (
+  <TouchableOpacity
+    style={styles.botaoLiberar}
+    onPress={() => {
+      alertaUniversal(
+        'Liberar lote',
+        'Tem certeza que deseja liberar este lote para outro usuário?',
+        [
+          { text: 'Cancelar', style: 'cancel' },
+          {
+            text: 'Liberar',
+            style: 'destructive',
+            onPress: async () => {
+              try {
+                setLiberandoOtimista(true);
+                await liberarLote(lote.id);
+                await recarregar();
+                alertaUniversal('Sucesso', 'Lote liberado com sucesso!');
+              } catch (e: any) {
+                setLiberandoOtimista(false);
+                alertaUniversal('Erro ao liberar lote', e.message);
+              }
+            },
+          },
+        ]
+      );
+    }}
+  >
+    <Text style={{ color: '#FFF' }}>Liberar lote para outro usuário</Text>
+  </TouchableOpacity>
+)}
+
 
         {/* Grid de índices */}
         {idx && (
