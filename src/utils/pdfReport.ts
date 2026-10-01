@@ -1,8 +1,10 @@
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
+import * as FileSystem from 'expo-file-system';
 import { Alert, Platform } from 'react-native';
 import { computeIndices, daysBetween, todayStr, fmt, fmtDateBR, Lote } from './calculations';
 import { ITENS_AVALIACAO_TECNICA } from './constants';
+import { getWatermarkSrc, getWatermarkLogoSrc } from './watermark';
 
 
 function tabelaGenerica(titulo: string, linhas: string[][]): string {
@@ -28,12 +30,20 @@ function tabelaComHeader(titulo: string, header: string[], linhas: string[][]): 
   `;
 }
 
-export async function exportarRelatorioPdf(lote: Lote) {
+export async function exportarRelatorioPdf(lote: Lote, logoBase64?: string | null) {
   try {
     const idx = computeIndices(lote);
     const dataRef = lote.status === 'encerrado' && lote.encerramento ? lote.encerramento.data : todayStr();
     const idade = daysBetween(lote.dataAlojamento, dataRef);
     const nomeGalpao = (id: string) => lote.galpoes.find((g) => g.id === id)?.nome ?? id;
+
+    // 👇 Marca d'água padrão do app (versão completa, para o fundo)
+    const watermarkSrc = await getWatermarkSrc();
+
+    // 👇 Versão pequena/comprimida da splash, usada como logo de fallback no cabeçalho
+    //    (evita duplicar a imagem grande no HTML, o que travava a geração de PDF no Android)
+    const watermarkLogoSrc = logoBase64 ? null : await getWatermarkLogoSrc();
+
 
     // ---------- Tabela de galpões ----------
     const linhasGalpoes = idx.statsGalpoes.map((s) => [
@@ -164,25 +174,64 @@ export async function exportarRelatorioPdf(lote: Lote) {
       `;
     }
 
+    // 👇 Logo à esquerda; se não houver logo configurada, usa a versão pequena/colorida da splash
+    const logoHtml = logoBase64
+      ? `<img src="${logoBase64}" style="width:72px; height:72px; object-fit:contain; border-radius:8px;" />`
+      : watermarkLogoSrc
+      ? `<img src="${watermarkLogoSrc}" style="width:72px; height:72px; object-fit:contain; border-radius:8px;" />`
+      : `<div style="width:72px; height:72px; border:1px dashed #ccc; border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:10px; color:#999; text-align:center;">Sem logo</div>`;
+
     const html = `
       <html>
         <head>
           <meta charset="utf-8" />
           <style>
-            body { font-family: -apple-system, Helvetica, Arial, sans-serif; padding: 24px; color: #1a1a1a; }
-            h1 { font-size: 20px; margin-bottom: 4px; }
-            h2 { font-size: 14px; color: #666; margin-top: 0; font-weight: normal; }
+            * { box-sizing: border-box; }
+            html, body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            body {
+              font-family: -apple-system, Helvetica, Arial, sans-serif;
+              padding: 24px;
+              color: #1a1a1a;
+              position: relative;
+              margin: 0;
+            }
+            body::before {
+  content: '';
+  display: ${watermarkSrc ? 'block' : 'none'};
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-image: url('${watermarkSrc ?? ''}');
+  background-repeat: no-repeat;
+  background-position: center center;
+  background-size: 220px 233px;
+  filter: grayscale(100%);
+  opacity: 0.08;
+  z-index: 0;
+  pointer-events: none;
+}
+
+
+            .conteudo {
+              position: relative;
+              z-index: 1;
+            }
+            .cabecalho { display: flex; align-items: center; justify-content: flex-start; gap: 16px; text-align: left; }
+            h1 { font-size: 20px; margin-bottom: 4px; text-align: left; }
+            h2 { font-size: 14px; color: #666; margin-top: 0; font-weight: normal; text-align: left; }
             h3 { font-size: 15px; margin-bottom: 6px; border-bottom: 2px solid #2563eb; padding-bottom: 4px; }
             .section { margin-top: 24px; page-break-inside: avoid; }
             .grid { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; }
-            .card { border: 1px solid #ddd; border-radius: 10px; padding: 12px 16px; min-width: 130px; }
+            .card { border: 1px solid #ddd; border-radius: 10px; padding: 12px 16px; min-width: 130px; background: rgba(255,255,255,0.55); }
             .card .label { font-size: 11px; color: #888; text-transform: uppercase; }
             .card .value { font-size: 18px; font-weight: 700; margin-top: 4px; }
-            table { width: 100%; border-collapse: collapse; margin-top: 8px; }
-            td { padding: 6px 4px; border-bottom: 1px solid #eee; font-size: 12px; }
+            table { width: 100%; border-collapse: collapse; margin-top: 8px; background: rgba(255,255,255,0.55); }
+            td { padding: 6px 4px; border-bottom: 1px solid rgba(238,238,238,0.7); font-size: 12px; }
             td.label { color: #666; }
             td.value { text-align: right; font-weight: 600; }
-            td.th { font-weight: 700; background: #f3f4f6; text-align: left; }
+            td.th { font-weight: 700; background: rgba(243,244,246,0.6); text-align: left; }
             .tabela-registros td { text-align: left; }
             .footer { margin-top: 32px; font-size: 11px; color: #aaa; text-align: center; }
             .assinatura { margin-top: 48px; display: flex; justify-content: space-between; }
@@ -190,100 +239,122 @@ export async function exportarRelatorioPdf(lote: Lote) {
           </style>
         </head>
         <body>
-          <h1>Relatório do Lote ${lote.numero ?? ''}</h1>
-          <h2>Linhagem: ${lote.linhagem} — Sexagem: ${lote.sexagem} — Alojamento: ${fmtDateBR(lote.dataAlojamento)}</h2>
-          <h2>Gerado em ${new Date().toLocaleDateString('pt-BR')} — Status: ${lote.status}</h2>
+          <div class="conteudo">
+            <div class="cabecalho">
+              ${logoHtml}
+              <div>
+                <h1>Relatório do Lote ${lote.numero ?? ''}</h1>
+                <h2>Linhagem: ${lote.linhagem} — Sexagem: ${lote.sexagem} — Alojamento: ${fmtDateBR(lote.dataAlojamento)}</h2>
+                <h2>Gerado em ${new Date().toLocaleDateString('pt-BR')} — Status: ${lote.status}</h2>
+              </div>
+            </div>
 
-          <div class="section grid">
-            <div class="card"><div class="label">Idade</div><div class="value">${idade} dias</div></div>
-            <div class="card"><div class="label">Viabilidade</div><div class="value">${fmt(idx.viabilidade, 1)}%</div></div>
-            <div class="card"><div class="label">Peso médio</div><div class="value">${fmt(idx.pesoMedioAtualG, 0)} g</div></div>
-            <div class="card"><div class="label">Conversão</div><div class="value">${fmt(idx.conversaoAlimentar, 3)}</div></div>
-            <div class="card"><div class="label">GPD</div><div class="value">${fmt(idx.gpd, 1)} g/dia</div></div>
-            <div class="card"><div class="label">IEP</div><div class="value">${fmt(idx.iep, 0)}</div></div>
+            <div class="section grid">
+              <div class="card"><div class="label">Idade</div><div class="value">${idade} dias</div></div>
+              <div class="card"><div class="label">Viabilidade</div><div class="value">${fmt(idx.viabilidade, 1)}%</div></div>
+              <div class="card"><div class="label">Peso médio</div><div class="value">${fmt(idx.pesoMedioAtualG, 0)} g</div></div>
+              <div class="card"><div class="label">Conversão</div><div class="value">${fmt(idx.conversaoAlimentar, 3)}</div></div>
+              <div class="card"><div class="label">GPD</div><div class="value">${fmt(idx.gpd, 1)} g/dia</div></div>
+              <div class="card"><div class="label">IEP</div><div class="value">${fmt(idx.iep, 0)}</div></div>
+            </div>
+
+            <div class="section">
+              <table>
+                <tr><td class="label">Aves vivas</td><td class="value">${idx.avesVivas} / ${idx.quantidadeAlojadaTotal}</td></tr>
+                <tr><td class="label">Mortalidade acumulada</td><td class="value">${idx.mortalidadeAcumulada}</td></tr>
+                <tr><td class="label">Descartados acumulados</td><td class="value">${idx.descartadosAcumulados}</td></tr>
+                <tr><td class="label">Ração acumulada</td><td class="value">${fmt(idx.racaoAcumuladaKg, 0)} kg</td></tr>
+                <tr><td class="label">Água acumulada</td><td class="value">${fmt(idx.aguaAcumuladaL, 0)} L</td></tr>
+              </table>
+            </div>
+
+            <div class="section">
+              <h3>Detalhamento por Galpão</h3>
+              <table class="tabela-registros">
+                <tr><td class="th">Galpão</td><td class="th">Alojado</td><td class="th">Vivas</td><td class="th">Mortalidade</td><td class="th">Descarte</td><td class="th">Peso final</td></tr>
+                ${linhasGalpoes.map((l) => `<tr>${l.map((c) => `<td>${c}</td>`).join('')}</tr>`).join('')}
+              </table>
+            </div>
+
+            ${tabelaGenerica('Temperatura', linhasTemp)}
+            ${tabelaGenerica('Mortalidade e Descarte', linhasMort)}
+            ${tabelaGenerica('Consumo de Água', linhasAgua)}
+            ${tabelaGenerica('Pesagens', linhasPesagem)}
+            ${tabelaGenerica('Consumo de Ração', linhasRacao)}
+            ${tabelaGenerica('Estoque de Ração (Silo / Equipamentos)', linhasEstoque)}
+            ${tabelaComHeader(
+              'Avaliações Técnicas',
+              ['Data', 'Galpão', 'Hora', 'Técnico', 'Itens Avaliados', 'Orientações'],
+              linhasAvaliacao
+            )}
+            ${tabelaGenerica('Medicamentos Terapêuticos', linhasMedicamentos)}
+            ${tabelaGenerica('Produtos Químicos', linhasQuimicos)}
+            ${secaoAbate}
+
+            <div class="assinatura">
+              <div class="linha">Responsável Técnico</div>
+              <div class="linha">Produtor</div>
+            </div>
+
+            <div class="footer">Relatório gerado automaticamente pelo app em ${new Date().toLocaleString('pt-BR')}.</div>
           </div>
-
-          <div class="section">
-            <table>
-              <tr><td class="label">Aves vivas</td><td class="value">${idx.avesVivas} / ${idx.quantidadeAlojadaTotal}</td></tr>
-              <tr><td class="label">Mortalidade acumulada</td><td class="value">${idx.mortalidadeAcumulada}</td></tr>
-              <tr><td class="label">Descartados acumulados</td><td class="value">${idx.descartadosAcumulados}</td></tr>
-              <tr><td class="label">Ração acumulada</td><td class="value">${fmt(idx.racaoAcumuladaKg, 0)} kg</td></tr>
-              <tr><td class="label">Água acumulada</td><td class="value">${fmt(idx.aguaAcumuladaL, 0)} L</td></tr>
-            </table>
-          </div>
-
-          <div class="section">
-            <h3>Detalhamento por Galpão</h3>
-            <table class="tabela-registros">
-              <tr><td class="th">Galpão</td><td class="th">Alojado</td><td class="th">Vivas</td><td class="th">Mortalidade</td><td class="th">Descarte</td><td class="th">Peso final</td></tr>
-              ${linhasGalpoes.map((l) => `<tr>${l.map((c) => `<td>${c}</td>`).join('')}</tr>`).join('')}
-            </table>
-          </div>
-
-          ${tabelaGenerica('Temperatura', linhasTemp)}
-          ${tabelaGenerica('Mortalidade e Descarte', linhasMort)}
-          ${tabelaGenerica('Consumo de Água', linhasAgua)}
-          ${tabelaGenerica('Pesagens', linhasPesagem)}
-          ${tabelaGenerica('Consumo de Ração', linhasRacao)}
-          ${tabelaGenerica('Estoque de Ração (Silo / Equipamentos)', linhasEstoque)}
-          ${tabelaComHeader(
-            'Avaliações Técnicas',
-            ['Data', 'Galpão', 'Hora', 'Técnico', 'Itens Avaliados', 'Orientações'],
-            linhasAvaliacao
-          )}
-          ${tabelaGenerica('Medicamentos Terapêuticos', linhasMedicamentos)}
-          ${tabelaGenerica('Produtos Químicos', linhasQuimicos)}
-          ${secaoAbate}
-
-          <div class="assinatura">
-            <div class="linha">Responsável Técnico</div>
-            <div class="linha">Produtor</div>
-          </div>
-
-          <div class="footer">Relatório gerado automaticamente pelo app em ${new Date().toLocaleString('pt-BR')}.</div>
         </body>
       </html>
     `;
 
+    // 👇 Nome do arquivo final desejado (sanitizado para evitar caracteres inválidos)
+    const numeroSanitizado = String(lote.numero ?? 'SemNumero').replace(/[^a-zA-Z0-9_-]/g, '');
+    const nomeArquivo = `GestaoAvi-Lote${numeroSanitizado}`;
+
     // ---------- Geração do PDF (com suporte à Web) ----------
-if (Platform.OS === 'web') {
-  const printWindow = window.open('', '_blank');
-  if (!printWindow) {
-    Alert.alert('Erro', 'Não foi possível abrir a janela de impressão. Verifique se o navegador não bloqueou pop-ups.');
-    return;
-  }
-  printWindow.document.open();
-  printWindow.document.write(html);
-  printWindow.document.close();
+    if (Platform.OS === 'web') {
+      const printWindow = window.open('', '_blank');
+      if (!printWindow) {
+        Alert.alert('Erro', 'Não foi possível abrir a janela de impressão. Verifique se o navegador não bloqueou pop-ups.');
+        return;
+      }
+      printWindow.document.open();
+      printWindow.document.write(html);
+      // 👇 Sugere o nome do arquivo ao navegador (usado como padrão em "Salvar como PDF")
+      printWindow.document.title = nomeArquivo;
+      printWindow.document.close();
 
-  // Aguarda o conteúdo renderizar antes de imprimir
-  printWindow.onload = () => {
-    printWindow.focus();
-    printWindow.print();
-  };
+      printWindow.onload = () => {
+        printWindow.focus();
+        printWindow.print();
+      };
 
-  // Fallback caso onload não dispare em alguns navegadores
-  setTimeout(() => {
-    printWindow.focus();
-    printWindow.print();
-  }, 500);
+      setTimeout(() => {
+        printWindow.focus();
+        printWindow.print();
+      }, 500);
 
-  return;
-}
+      return;
+    }
 
-
+    // ---------- Mobile: gera o PDF e renomeia o arquivo ----------
     const { uri } = await Print.printToFileAsync({ html });
+
+    // Move/renomeia o arquivo gerado para o nome desejado, na mesma pasta de cache
+    const novoUri = `${FileSystem.cacheDirectory}${nomeArquivo}.pdf`;
+
+    // Remove um arquivo antigo com o mesmo nome, se existir (evita conflito)
+    const existeArquivo = await FileSystem.getInfoAsync(novoUri);
+    if (existeArquivo.exists) {
+      await FileSystem.deleteAsync(novoUri, { idempotent: true });
+    }
+
+    await FileSystem.moveAsync({ from: uri, to: novoUri });
 
     const canShare = await Sharing.isAvailableAsync();
     if (canShare) {
-      await Sharing.shareAsync(uri, {
+      await Sharing.shareAsync(novoUri, {
         mimeType: 'application/pdf',
         dialogTitle: `Relatório do Lote ${lote.numero ?? ''}`,
         UTI: 'com.adobe.pdf',
       });
     } else {
-      Alert.alert('PDF gerado', `Arquivo salvo em: ${uri}`);
+      Alert.alert('PDF gerado', `Arquivo salvo em: ${novoUri}`);
     }
   } catch (error) {
     console.error('Erro ao gerar PDF:', error);

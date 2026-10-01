@@ -8,7 +8,7 @@ interface Props {
   label?: string;
 }
 
-export function SalvarButton({ onPress, loading, label = 'Salvar lançamento' }: Props) {
+export function SalvarButton({ onPress, loading, label = '✓ Salvar lançamento' }: Props) {
   return (
     <TouchableOpacity
       onPress={onPress}

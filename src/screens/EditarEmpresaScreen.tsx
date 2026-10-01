@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, ActivityIndicator,
-  KeyboardAvoidingView, Platform, Modal, TextInput, FlatList,
+  KeyboardAvoidingView, Platform, Modal, TextInput, FlatList, Image,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { supabase } from '../lib/supabase';
@@ -12,6 +12,7 @@ import { TextField } from '../components/TextField';
 import { SimpleSelect } from '../components/SimpleSelect';
 import { AppHeader } from '../components/AppHeader';
 import { alertaUniversal } from '../utils/alerta';
+import * as ImagePicker from 'expo-image-picker';
 
 type Pais = { id: number; nome: string; sigla: string };
 type Estado = { id: number; nome: string; sigla: string };
@@ -179,7 +180,7 @@ function SeletorCidade({
 
 export function EditarEmpresaScreen() {
   const navigation = useNavigation<any>();
-  const { perfil } = usePerfil();
+  const { perfil, recarregarPerfil } = usePerfil();
 
   const [carregando, setCarregando] = useState(true);
   const [salvando, setSalvando] = useState(false);
@@ -205,6 +206,9 @@ export function EditarEmpresaScreen() {
   const [codigoIntegracao, setCodigoIntegracao] = useState('');
   const [codigoParceiro, setCodigoParceiro] = useState('');
 
+  // Logo da empresa
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [enviandoLogo, setEnviandoLogo] = useState(false);
 
   useEffect(() => {
     async function carregar() {
@@ -213,7 +217,7 @@ export function EditarEmpresaScreen() {
       const { data: empresa, error } = await supabase
         .from('empresas')
         .select(
-  'nome, tipopessoa, cpf_cnpj, responsavel, telefone, email, pais_id, estado_id, cidade, tipo, codigo_integracao, codigo_parceiro'
+  'nome, tipopessoa, cpf_cnpj, responsavel, telefone, email, pais_id, estado_id, cidade, tipo, codigo_integracao, codigo_parceiro, logo_url'
 )
 
         .eq('id', perfil.empresa_id)
@@ -237,7 +241,7 @@ export function EditarEmpresaScreen() {
       setTipoEmpresa(empresa.tipo ?? '');
       setCodigoIntegracao(empresa.codigo_integracao ?? '');
       setCodigoParceiro(empresa.codigo_parceiro ?? '');
-
+      setLogoUrl(empresa.logo_url ?? null);
 
       const { data: paisesData } = await supabase.from('paises').select('id, nome, sigla').order('nome');
       if (paisesData) setPaises(paisesData);
@@ -316,6 +320,59 @@ export function EditarEmpresaScreen() {
     carregarIntegracoes();
   }, [tipoEmpresa]);
 
+  // --- Upload / troca do logo da empresa ---
+  async function escolherEEnviarLogo() {
+    if (!perfil?.empresa_id) return;
+
+    const permissao = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permissao.granted) {
+      alertaUniversal('Permissão necessária', 'Autorize o acesso às imagens para selecionar o logo.');
+      return;
+    }
+
+    const resultado = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      quality: 0.7,
+      allowsEditing: true,
+      aspect: [1, 1],
+    });
+    if (resultado.canceled) return;
+
+    setEnviandoLogo(true);
+    try {
+      const uri = resultado.assets[0].uri;
+      const resposta = await fetch(uri);
+      const blob = await resposta.arrayBuffer();
+      const path = `${perfil.empresa_id}/logo.png`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('logos-empresas')
+        .upload(path, blob, { contentType: 'image/png', upsert: true });
+
+      if (uploadError) throw uploadError;
+
+      const { data: urlData } = supabase.storage.from('logos-empresas').getPublicUrl(path);
+      // Evita cache antigo do navegador/CDN ao exibir a prévia
+      const urlComVersao = `${urlData.publicUrl}?v=${Date.now()}`;
+      const agora = new Date().toISOString();
+
+      const { error: updateError } = await supabase
+        .from('empresas')
+        .update({ logo_url: urlData.publicUrl, logo_atualizado_em: agora })
+        .eq('id', perfil.empresa_id);
+
+      if (updateError) throw updateError;
+
+      setLogoUrl(urlComVersao);
+      await recarregarPerfil();
+      alertaUniversal('Sucesso', 'Logo atualizado.');
+    } catch (e: any) {
+      alertaUniversal('Erro ao enviar logo', e.message ?? 'Tente novamente.');
+    } finally {
+      setEnviandoLogo(false);
+    }
+  }
+
   function validar(): string | null {
     if (!nome.trim()) return 'Informe o nome da empresa.';
     const cpfCnpjLimpo = cpfCnpj.replace(/\D/g, '');
@@ -390,6 +447,41 @@ export function EditarEmpresaScreen() {
     >
       <AppHeader onVoltar={() => navigation.goBack()} titulo="Editar Empresa" />
       <ScrollView contentContainerStyle={{ padding: 24 }} keyboardShouldPersistTaps="handled">
+        <View style={{ alignItems: 'center', marginBottom: 16 }}>
+          <View
+            style={{
+              width: 110,
+              height: 110,
+              borderRadius: 12,
+              borderWidth: 1,
+              borderColor: COLORS.line,
+              backgroundColor: '#fff',
+              justifyContent: 'center',
+              alignItems: 'center',
+              marginBottom: 10,
+              overflow: 'hidden',
+            }}
+          >
+            {logoUrl ? (
+              <Image source={{ uri: logoUrl }} style={{ width: '100%', height: '100%' }} resizeMode="contain" />
+            ) : (
+              <Text style={{ color: '#999', fontSize: 11, textAlign: 'center', paddingHorizontal: 8 }}>
+                Sem logo
+              </Text>
+            )}
+          </View>
+
+          <TouchableOpacity onPress={escolherEEnviarLogo} disabled={enviandoLogo}>
+            {enviandoLogo ? (
+              <ActivityIndicator color={COLORS.primary} />
+            ) : (
+              <Text style={{ color: COLORS.primary, fontWeight: '600' }}>
+                {logoUrl ? 'Alterar logo' : 'Adicionar logo'}
+              </Text>
+            )}
+          </TouchableOpacity>
+        </View>
+
         <View style={{ gap: 10 }}>
           <TextField label="Nome da empresa" value={nome} onChangeText={setNome} autoCapitalize="characters" />
 

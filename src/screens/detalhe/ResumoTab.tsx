@@ -1,6 +1,6 @@
 // src/screens/detalhe/ResumoTab.tsx
 import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, Platform } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { AlertTriangle, Weight, Droplets, FileDown, Trash2 } from 'lucide-react-native';
 
@@ -12,6 +12,8 @@ import { useIndicadoresLote } from '../../hooks/useIndicadoresLote';
 import { SimpleSelect } from '../../components/SimpleSelect';
 import { exportarRelatorioPdf } from '../../utils/pdfReport';
 import { useAuth } from '../../auth/AuthContext';
+import { usePerfil } from '../../hooks/usePerfil';
+import { getLogoBase64 } from '../../storage/logoCache';
 import { alertaUniversal } from '../../utils/alerta';
 
 const FUNCOES_GERADO_POR = [
@@ -23,6 +25,7 @@ const FUNCOES_GERADO_POR = [
 export function ResumoTab({ route, navigation }: any) {
   const { loteId } = route.params;
   const { userId } = useAuth();
+  const { perfil } = usePerfil();
   const { lote, idx, recarregar } = useIndicadoresLote(loteId);
   const [nomeGeradoPor, setNomeGeradoPor] = useState('');
   const [funcaoGeradoPor, setFuncaoGeradoPor] = useState('');
@@ -50,13 +53,19 @@ export function ResumoTab({ route, navigation }: any) {
   };
 
   const handleGerarPdf = async () => {
-    setGerandoPdf(true);
-    try {
-      await exportarRelatorioPdf(lote);
-    } finally {
-      setGerandoPdf(false);
-    }
-  };
+  setGerandoPdf(true);
+  try {
+
+    const logoBase64 = Platform.OS === 'web'
+      ? perfil?.logoUrl ?? null
+      : perfil?.empresa_id ? await getLogoBase64(perfil.empresa_id) : null;
+
+    await exportarRelatorioPdf(lote, logoBase64);
+  } finally {
+    setGerandoPdf(false);
+  }
+};
+
 
   const handleEncerrar = () => {
     navigation.navigate('EncerrarForm', { loteId: lote.id });

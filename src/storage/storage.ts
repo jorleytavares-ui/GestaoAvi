@@ -489,6 +489,7 @@ export async function setRetiradaLinha(
   return updateLote(userId, loteId, (lote) => ({ ...lote, retiradaLinha: lista } as Lote));
 }
 
+
 // ---------- Abate: embarque ----------
 export async function addEmbarque(
   userId: string,
@@ -502,6 +503,7 @@ export async function addEmbarque(
     numCaixas: number | null;
     caixasVazias: number | null;
     placaCaminhao: string;
+    observacao?: string;
   }
 ): Promise<Lote | undefined> {
   return updateLote(userId, loteId, (lote) => {
@@ -509,6 +511,7 @@ export async function addEmbarque(
     return { ...lote, embarques } as Lote;
   });
 }
+
 
 export async function removeEmbarque(
   userId: string,

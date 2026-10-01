@@ -265,7 +265,7 @@ export function DetalheLoteScreen({ route, navigation }: Props) {
                 <StatCard icon={Bird} label="Aves vivas" value={fmt(idx.avesVivas)} unit={`/ ${fmt(idx.quantidadeAlojadaTotal)}`} />
               </View>
               <View style={styles.gridItem}>
-                <StatCard icon={TrendingUp} label="Viabilidade" value={fmt(idx.viabilidade, 1)} unit="%" />
+                <StatCard icon={TrendingUp} label="Viabilidade" value={fmt(idx.viabilidade, 3)} unit="%" />
               </View>
               <View style={styles.gridItem}>
                 <StatCard icon={Wheat} label="Ração acum." value={fmt(idx.racaoAcumuladaKg, 0)} unit="kg" />
@@ -290,7 +290,7 @@ export function DetalheLoteScreen({ route, navigation }: Props) {
                 <StatCard
                   icon={TrendingUp}
                   label="GPD"
-                  value={idx.gpd !== null ? fmt(idx.gpd, 1) : '—'}
+                  value={idx.gpd !== null ? fmt(idx.gpd, 2) : '—'}
                   unit="g/dia"
                 />
               </View>

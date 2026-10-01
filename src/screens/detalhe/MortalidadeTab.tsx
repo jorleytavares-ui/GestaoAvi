@@ -242,7 +242,7 @@ return (
         {salvando ? (
           <ActivityIndicator color="#fff" />
         ) : (
-          <Text style={styles.buttonText}>✓ Salvar</Text>
+          <Text style={styles.buttonText}>✓ Salvar lançamento</Text>
         )}
       </Pressable>
 

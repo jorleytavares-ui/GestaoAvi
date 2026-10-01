@@ -4,6 +4,7 @@ import NetInfo from '@react-native-community/netinfo';
 import { useAuth } from '../auth/AuthContext';
 import { supabase } from '../lib/supabase';
 import { salvarPerfilCache, getPerfilCache } from '../storage/perfilCache';
+import { sincronizarLogo } from '../storage/logoCache';
 import { PapelId } from '../constants/papeis';
 
 type Perfil = {
@@ -12,6 +13,8 @@ type Perfil = {
   empresa_id: string;
   papelId: PapelId;
   empresaTipo?: string;
+  logoUrl?: string | null;
+  logoAtualizadoEm?: string | null;
 };
 
 function mesmoPerfil(a: Perfil, b: Perfil) {
@@ -20,7 +23,9 @@ function mesmoPerfil(a: Perfil, b: Perfil) {
     a.nome === b.nome &&
     a.empresa_id === b.empresa_id &&
     a.papelId === b.papelId &&
-    a.empresaTipo === b.empresaTipo
+    a.empresaTipo === b.empresaTipo &&
+    a.logoUrl === b.logoUrl &&
+    a.logoAtualizadoEm === b.logoAtualizadoEm
   );
 }
 
@@ -77,6 +82,8 @@ export function usePerfil() {
             empresa_id: cache.empresaId,
             papelId: cache.papelId,
             empresaTipo: cache.empresaTipo,
+            logoUrl: cache.logoUrl ?? null,
+            logoAtualizadoEm: cache.logoAtualizadoEm ?? null,
           },
           cache.ownerId
         );
@@ -110,7 +117,7 @@ export function usePerfil() {
 
       const { data: empresa, error: empresaError } = await supabase
         .from('empresas')
-        .select('owner_id, tipo')
+        .select('owner_id, tipo, logo_url, logo_atualizado_em')
         .eq('id', data.empresa_id)
         .maybeSingle();
 
@@ -130,6 +137,8 @@ export function usePerfil() {
           empresa_id: data.empresa_id,
           papelId: data.papel_id,
           empresaTipo: empresa?.tipo,
+          logoUrl: empresa?.logo_url ?? null,
+          logoAtualizadoEm: empresa?.logo_atualizado_em ?? null,
         },
         ownerIdResolvido
       );
@@ -141,8 +150,15 @@ export function usePerfil() {
         papelId: data.papel_id,
         ownerId: ownerIdResolvido,
         empresaTipo: empresa?.tipo,
+        logoUrl: empresa?.logo_url ?? null,
+        logoAtualizadoEm: empresa?.logo_atualizado_em ?? null,
         precisaRedefinirSenha: !!data.precisa_redefinir_senha,
       });
+
+      // Baixa/atualiza o logo em cache local (não bloqueia a tela)
+      if (empresa?.logo_url) {
+        sincronizarLogo(data.empresa_id, empresa.logo_url, empresa.logo_atualizado_em ?? null);
+      }
 
       if (atual()) setCarregandoPerfil(false);
     } catch (e) {

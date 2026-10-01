@@ -82,6 +82,7 @@ export function AbateTab({ route }: Props) {
   const [embCaixas, setEmbCaixas] = useState('');
   const [embVazias, setEmbVazias] = useState('');
   const [embPlaca, setEmbPlaca] = useState('');
+  const [embObs, setEmbObs] = useState('');
 
   const [medNome, setMedNome] = useState('');
   const [medInicio, setMedInicio] = useState<Date | null>(null);
@@ -143,6 +144,7 @@ export function AbateTab({ route }: Props) {
       e.numCaixas != null ? `${e.numCaixas} caixas` : null,
       e.caixasVazias != null ? `${e.caixasVazias} vazias` : null,
       e.placaCaminhao || null,
+      e.observacao || null,
     ].filter(Boolean).join(' · '),
   }));
 
@@ -244,8 +246,9 @@ export function AbateTab({ route }: Props) {
         numCaixas: embCaixas ? Number(embCaixas) : null,
         caixasVazias: embVazias ? Number(embVazias) : null,
         placaCaminhao: embPlaca.trim(),
+        observacao: embObs.trim(),
       });
-      setEmbData(null); setEmbHora(null); setEmbPorta(''); setEmbCaixas(''); setEmbVazias(''); setEmbPlaca('');
+      setEmbData(null); setEmbHora(null); setEmbPorta(''); setEmbCaixas(''); setEmbVazias(''); setEmbPlaca(''); setEmbObs('');
       carregar();
       showToast('Embarque adicionado com sucesso.', 'success');
     } catch (e) {
@@ -436,8 +439,19 @@ export function AbateTab({ route }: Props) {
             <TextField label="Caixas vazias" placeholder="0" keyboardType="numeric" value={embVazias} onChangeText={setEmbVazias} />
           </View>
         </View>
-        <View style={{ marginTop: 8, marginBottom: 4 }}>
+        <View style={{ marginTop: 8, marginBottom: 8 }}>
           <TextField label="Placa do caminhão" placeholder="Ex: ABC1D23" value={embPlaca} onChangeText={setEmbPlaca} />
+        </View>
+        <View style={{ marginBottom: 4 }}>
+          <Text style={styles.galpaoNome}>Observação</Text>
+          <TextInput
+            style={[styles.input, styles.textarea]}
+            value={embObs}
+            onChangeText={setEmbObs}
+            placeholder="Ex: atraso no caminhão, condições climáticas..."
+            multiline
+            numberOfLines={3}
+          />
         </View>
         <SalvarButton onPress={salvarEmbarque} label="Adicionar embarque" />
 
@@ -517,7 +531,7 @@ export function AbateTab({ route }: Props) {
         <View style={{ marginTop: 8, marginBottom: 4 }}>
           <TextField label="Dosagem" placeholder="Ex: 1g / 10L de água" value={medDose} onChangeText={setMedDose} />
         </View>
-        <SalvarButton onPress={salvarMedicamento} label="Adicionar" />
+        <SalvarButton onPress={salvarMedicamento} label="✓ Salvar lançamento" />
 
         {medicamentos.map((m: any) => (
           <View key={m.id} style={styles.itemBox}>

@@ -96,7 +96,7 @@ export function RacaoLancamentoCard({ lote, onSalvo, embedded }: Props) {
 
       {!!erro && <Text style={styles.erro}>{erro}</Text>}
 
-      <SalvarButton onPress={handleSalvar} loading={loading} label="Adicionar lançamento" />
+      <SalvarButton onPress={handleSalvar} loading={loading} label="✓ Salvar lançamento" />
     </View>
   );
 }

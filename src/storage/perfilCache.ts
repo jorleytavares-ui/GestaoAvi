@@ -9,6 +9,8 @@ type PerfilCache = {
   papelId: PapelId;
   ownerId: string;
   empresaTipo?: string;
+  logoUrl?: string | null;
+  logoAtualizadoEm?: string | null;
   precisaRedefinirSenha: boolean; // 👈 apenas o tipo, sem lógica aqui
 };
 
