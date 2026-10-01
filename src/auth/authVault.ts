@@ -167,3 +167,19 @@ export async function atualizarTokensLocal(
 
   await setItem(chaveDoEmail(email), JSON.stringify(atualizada));
 }
+
+// ---------- Usuário "ativo" neste aparelho ----------
+// Permite reabrir o app offline direto na sessão certa, sem depender do client do Supabase.
+const ATIVA_KEY = 'gestaoavi_sessao_ativa';
+
+export async function definirSessaoAtiva(email: string): Promise<void> {
+  await setItem(ATIVA_KEY, email.trim().toLowerCase());
+}
+
+export async function getSessaoAtiva(): Promise<string | null> {
+  return getItem(ATIVA_KEY);
+}
+
+export async function limparSessaoAtiva(): Promise<void> {
+  await deleteItem(ATIVA_KEY);
+}

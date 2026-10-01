@@ -247,11 +247,31 @@ export async function exportarRelatorioPdf(lote: Lote) {
     `;
 
     // ---------- Geração do PDF (com suporte à Web) ----------
-    if (Platform.OS === 'web') {
-      // Na web, printToFileAsync não retorna uri; usamos o diálogo de impressão nativo do navegador
-      await Print.printAsync({ html });
-      return;
-    }
+if (Platform.OS === 'web') {
+  const printWindow = window.open('', '_blank');
+  if (!printWindow) {
+    Alert.alert('Erro', 'Não foi possível abrir a janela de impressão. Verifique se o navegador não bloqueou pop-ups.');
+    return;
+  }
+  printWindow.document.open();
+  printWindow.document.write(html);
+  printWindow.document.close();
+
+  // Aguarda o conteúdo renderizar antes de imprimir
+  printWindow.onload = () => {
+    printWindow.focus();
+    printWindow.print();
+  };
+
+  // Fallback caso onload não dispare em alguns navegadores
+  setTimeout(() => {
+    printWindow.focus();
+    printWindow.print();
+  }, 500);
+
+  return;
+}
+
 
     const { uri } = await Print.printToFileAsync({ html });
 

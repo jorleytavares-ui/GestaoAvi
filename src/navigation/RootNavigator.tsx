@@ -1,5 +1,5 @@
 // src/navigation/RootNavigator.tsx
-import React from 'react';
+import React, { useRef } from 'react';
 import { View, ActivityIndicator } from 'react-native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
@@ -90,48 +90,50 @@ function LicencaGate({ children }: { children: React.ReactNode }) {
   const { perfil, carregandoPerfil } = usePerfil();
   const { carregando, status, offlineSemCache, relogioSuspeito, recarregar } = useLicenca();
 
-  // Evita "flash" da tela de bloqueio antes do perfil carregar
-  if (carregandoPerfil) {
-    return <Loading />;
+  // Guarda a última decisão do gate. Quando o app volta a ficar online (login silencioso)
+  // o perfil/licença são recarregados em segundo plano; durante essa recarga mostramos a
+  // MESMA tela de antes em vez de <Loading/>. Antes, o spinner desmontava o navegador
+  // inteiro e o usuário perdia a tela/formulário em que estava.
+  const ultimoRef = useRef<React.ReactNode>(null);
+
+  const admin = perfil?.papelId === 1;
+  const emCarga = carregandoPerfil || (!admin && carregando);
+  if (emCarga) {
+    return <>{ultimoRef.current ?? <Loading />}</>;
   }
 
-  // Admin proprietário do app nunca é bloqueado por licença
-  if (perfil?.papelId === 1) {
-    return <>{children}</>;
-  }
+  let node: React.ReactNode;
 
-  if (carregando) {
-    return <Loading />;
-  }
-
-  if (relogioSuspeito) {
-    return (
+  if (admin) {
+    // Admin proprietário do app nunca é bloqueado por licença
+    node = children;
+  } else if (relogioSuspeito) {
+    node = (
       <LicencaBloqueadaScreen
         motivo="Detectamos uma alteração no relógio do aparelho. Conecte-se à internet para revalidar sua licença."
         onTentarNovamente={recarregar}
       />
     );
-  }
-
-  if (offlineSemCache) {
-    return (
+  } else if (offlineSemCache) {
+    node = (
       <LicencaBloqueadaScreen
         motivo="Conecte-se à internet ao menos uma vez neste aparelho para validar sua licença."
         onTentarNovamente={recarregar}
       />
     );
-  }
-
-  if (status === 'expirada') {
-    return (
+  } else if (status === 'expirada') {
+    node = (
       <LicencaBloqueadaScreen
         motivo="Sua licença expirou. Conecte-se à internet para renovar ou entre em contato com o suporte."
         onTentarNovamente={recarregar}
       />
     );
+  } else {
+    node = children;
   }
 
-  return <>{children}</>;
+  ultimoRef.current = node;
+  return <>{node}</>;
 }
 
 export function RootNavigator() {

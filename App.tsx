@@ -12,10 +12,13 @@ import { migrarIdsInvalidosDeLotes } from './src/storage/storage';
 
 import { usePerfil } from './src/hooks/usePerfil';
 import { useAutoSync } from './src/hooks/useAutoSync';
+import { PromptSenhaModal } from './src/components/PromptSenhaModal';
+import { Alert } from 'react-native';
 
 // 👇 fica DENTRO do AuthProvider, pois usa useAuth()
 function AppInterno() {
-  const { userId } = useAuth();
+  const { userId, reautenticacaoPendente, reautenticarComSenha, adiarReautenticacao } = useAuth();
+  const [reautenticando, setReautenticando] = React.useState(false);
   const { perfil, ownerId } = usePerfil();
   useAutoSync(perfil?.empresa_id ?? null, ownerId);
 
@@ -27,11 +30,30 @@ function AppInterno() {
     })();
   }, [userId]);
 
+  async function confirmarReautenticacao(senha: string) {
+    setReautenticando(true);
+    const { error } = await reautenticarComSenha(senha);
+    setReautenticando(false);
+    if (error) Alert.alert('Não foi possível entrar', error);
+  }
+
   return (
     <SafeAreaProvider>
       <NavigationContainer>
         <RootNavigator />
       </NavigationContainer>
+
+      {/* Só aparece no caso raro em que o token remoto morreu de vez (senha trocada em outro
+          aparelho, sessão revogada) e não há senha em memória. O usuário continua trabalhando
+          offline por baixo; a tela atual NÃO é derrubada. */}
+      <PromptSenhaModal
+        visible={reautenticacaoPendente}
+        titulo="Reconectar ao servidor"
+        descricao="Sua sessão online expirou. Digite sua senha para voltar a sincronizar. Você pode continuar trabalhando offline."
+        onCancelar={adiarReautenticacao}
+        onConfirmar={confirmarReautenticacao}
+        carregando={reautenticando}
+      />
     </SafeAreaProvider>
   );
 }

@@ -19,8 +19,7 @@ import type { RootStackParamList } from '../navigation/types';
 import { useAuth } from '../auth/AuthContext';
 import { StatusVinculoBanner } from '../components/StatusVinculoBanner';
 import { SolicitacoesPendentesBanner } from '../components/SolicitacoesPendentesBanner';
-
-
+import { onLocalChange } from '../storage/localChangeEmitter';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Home'>;
 type StatusFiltro = 'ativo' | 'encerrado';
@@ -32,6 +31,7 @@ export function HomeScreen({ navigation }: Props) {
   const [lotes, setLotes] = useState<Lote[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [pendentes, setPendentes] = useState(0);
+  const [erroCarregamento, setErroCarregamento] = useState<string | null>(null);
 
   // ---- Filtros (só para Integracao) ----
   const [empresasVinculadas, setEmpresasVinculadas] = useState<EmpresaVinculada[]>([]);
@@ -42,14 +42,26 @@ export function HomeScreen({ navigation }: Props) {
 
   const [lotesEncerrados, setLotesEncerrados] = useState<Lote[]>([]);
   const [carregandoEncerrados, setCarregandoEncerrados] = useState(false);
+  
 
   const carregarLotes = useCallback(async () => {
     if (!userId) return;
-    const dados = await getLotes(userId);
-    setLotes(dados);
-    const qtdPendentes = await contarPendentes();
-    setPendentes(qtdPendentes);
-    setCarregando(false);
+    try {
+      // getLotes é sempre local (AsyncStorage), não deveria travar por rede.
+      // Se falhar mesmo assim, tratamos como erro genérico sem quebrar a tela.
+      const dados = await getLotes(userId);
+      setLotes(dados);
+
+      // contarPendentes já é resiliente a token expirado (retorna 0 em caso
+      // de erro), então não trava a UI.
+      const qtdPendentes = await contarPendentes();
+      setPendentes(qtdPendentes);
+      setErroCarregamento(null);
+    } catch (e: any) {
+      setErroCarregamento(e?.message ?? 'Erro ao carregar lotes.');
+    } finally {
+      setCarregando(false);
+    }
   }, [userId]);
 
   useFocusEffect(
@@ -59,8 +71,8 @@ export function HomeScreen({ navigation }: Props) {
   );
 
   useEffect(() => {
-    const interval = setInterval(carregarLotes, 5000);
-    return () => clearInterval(interval);
+    const unsubscribe = onLocalChange(carregarLotes);
+    return unsubscribe;
   }, [carregarLotes]);
 
   // Busca empresas vinculadas (para o dropdown)
@@ -141,6 +153,7 @@ export function HomeScreen({ navigation }: Props) {
 
         {!isIntegracao && <StatusVinculoBanner empresaId={empresaId} />}
         {isIntegracao && <SolicitacoesPendentesBanner empresaId={empresaId} />}
+
 
         {isIntegracao && (
           <View style={{ paddingHorizontal: 16, marginBottom: 12 }}>

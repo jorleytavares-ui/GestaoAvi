@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS } from '../theme/colors';
 import { HeaderMenu } from './HeaderMenu';
 import { usePerfil } from '../hooks/usePerfil';
+import { useAuth } from '../auth/AuthContext'; // 👈 novo import
 
 interface AppHeaderProps {
   onVoltar?: () => void;
@@ -15,6 +16,7 @@ interface AppHeaderProps {
 export function AppHeader({ onVoltar, titulo }: AppHeaderProps) {
   const insets = useSafeAreaInsets();
   const { perfil } = usePerfil();
+  const { offline } = useAuth(); // 👈 novo
 
   if (!onVoltar) {
     return (
@@ -29,9 +31,21 @@ export function AppHeader({ onVoltar, titulo }: AppHeaderProps) {
         }}
       >
         <View>
-          <Text style={{ fontSize: 24, fontWeight: '700', color: COLORS.primary }}>
-            GestãoAvi
-          </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
+            <Text style={{ fontSize: 24, fontWeight: '700', color: COLORS.primary }}>
+              GestãoAvi
+            </Text>
+            <Text
+              style={{
+                fontSize: 12,
+                fontWeight: '600',
+                marginLeft: 6,
+                color: offline ? '#C0392B' : '#2E7D32',
+              }}
+            >
+              {offline ? '(Offline)' : '(Online)'}
+            </Text>
+          </View>
           <Text style={{ fontSize: 12, color: COLORS.inkSoft, marginTop: -2 }}>
             Gestão de lotes de frango de corte
           </Text>

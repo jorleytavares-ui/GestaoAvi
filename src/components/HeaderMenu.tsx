@@ -8,15 +8,36 @@ import { usePerfil } from '../hooks/usePerfil';
 import { sincronizarTudo } from '../storage/sync';
 import { getLotes } from '../storage/storage';
 import { podeCadastrarUsuario, podeEditarEmpresa, podeGerenciarPlano } from '../constants/papeis';
+import { useExigirOnline } from '../hooks/useExigirOnline';
 
 export function HeaderMenu() {
   const [visivel, setVisivel] = useState(false);
   const [sincronizando, setSincronizando] = useState(false);
+  const [verificando, setVerificando] = useState(false); // checando a conexão após um clique
   const navigation = useNavigation<any>();
   const { signOut, userId, empresaTipo } = useAuth();
+  const exigirOnlineBase = useExigirOnline();
   const { perfil, ownerId } = usePerfil();
 
   const isIntegracao = empresaTipo === 'Integracao';
+
+  /** Se estiver offline: fecha o menu, volta para a Home e avisa. */
+  function exigirOnline(recurso: string): Promise<boolean> {
+    return exigirOnlineBase(recurso, () => setVisivel(false));
+  }
+
+  /** Navega para uma tela que só funciona online. */
+  async function irParaTelaOnline(destino: string, recurso: string) {
+    if (verificando) return; // evita toque duplo enquanto a conexão é verificada
+    setVerificando(true);
+    try {
+      if (!(await exigirOnline(recurso))) return;
+      setVisivel(false);
+      navigation.navigate(destino);
+    } finally {
+      setVerificando(false);
+    }
+  }
 
   function irParaConfiguracoes() {
     setVisivel(false);
@@ -24,8 +45,7 @@ export function HeaderMenu() {
   }
 
   function irParaSolicitacoesVinculo() {
-    setVisivel(false);
-    navigation.navigate('SolicitacoesVinculo');
+    irParaTelaOnline('SolicitacoesVinculo', 'Solicitações de vínculo');
   }
 
   async function sair() {
@@ -41,6 +61,8 @@ export function HeaderMenu() {
 
     setSincronizando(true);
     try {
+      if (!(await exigirOnline('Sincronizar agora'))) return;
+
       const resultado = await sincronizarTudo(perfil.empresa_id, ownerId);
       const falhas = resultado?.push?.falhas ?? 0;
 
@@ -87,7 +109,7 @@ export function HeaderMenu() {
             <TouchableOpacity
               style={styles.item}
               onPress={sincronizarAgora}
-              disabled={sincronizando}
+              disabled={sincronizando || verificando}
             >
               {sincronizando ? (
                 <ActivityIndicator size="small" color="#333" />
@@ -111,10 +133,8 @@ export function HeaderMenu() {
                 <View style={styles.separador} />
                 <TouchableOpacity
                   style={styles.item}
-                  onPress={() => {
-                    setVisivel(false);
-                    navigation.navigate('CadastroUsuario');
-                  }}
+                  onPress={() => irParaTelaOnline('CadastroUsuario', 'Cadastro de Usuário')}
+                  disabled={verificando}
                 >
                   <Ionicons name="person-add-outline" size={20} color="#333" />
                   <Text style={styles.itemTexto}>Cadastro de Usuário</Text>
@@ -127,10 +147,8 @@ export function HeaderMenu() {
                 <View style={styles.separador} />
                 <TouchableOpacity
                   style={styles.item}
-                  onPress={() => {
-                    setVisivel(false);
-                    navigation.navigate('EditarEmpresa');
-                  }}
+                  onPress={() => irParaTelaOnline('EditarEmpresa', 'Editar Empresa')}
+                  disabled={verificando}
                 >
                   <Ionicons name="business-outline" size={20} color="#333" />
                   <Text style={styles.itemTexto}>Editar Empresa</Text>
@@ -143,10 +161,8 @@ export function HeaderMenu() {
                 <View style={styles.separador} />
                 <TouchableOpacity
                   style={styles.item}
-                  onPress={() => {
-                    setVisivel(false);
-                    navigation.navigate('Planos');
-                  }}
+                  onPress={() => irParaTelaOnline('Planos', 'Cad. Planos (Admin)')}
+                  disabled={verificando}
                 >
                   <Ionicons name="pricetags-outline" size={20} color="#333" />
                   <Text style={styles.itemTexto}>Cad. Planos (Admin)</Text>
@@ -160,10 +176,8 @@ export function HeaderMenu() {
                 <View style={styles.separador} />
                 <TouchableOpacity
                   style={styles.item}
-                  onPress={() => {
-                    setVisivel(false);
-                    navigation.navigate('EscolherPlano');
-                  }}
+                  onPress={() => irParaTelaOnline('EscolherPlano', 'Meu Plano')}
+                  disabled={verificando}
                 >
                   <Ionicons name="pricetags-outline" size={20} color="#333" />
                   <Text style={styles.itemTexto}>Meu Plano</Text>
@@ -174,7 +188,7 @@ export function HeaderMenu() {
             {isIntegracao && podeEditarEmpresa(perfil?.papelId) && (
               <>
                 <View style={styles.separador} />
-                <TouchableOpacity style={styles.item} onPress={irParaSolicitacoesVinculo}>
+                <TouchableOpacity style={styles.item} onPress={irParaSolicitacoesVinculo} disabled={verificando}>
                   <Ionicons name="link-outline" size={20} color="#333" />
                   <Text style={styles.itemTexto}>Solicitações de vínculo</Text>
                 </TouchableOpacity>

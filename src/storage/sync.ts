@@ -13,25 +13,41 @@ import {
 
 import { Lote } from '../utils/calculations';
 import { listarEmpresasVinculadas } from '../services/empresas';
+import { emitSessaoInvalida, isErroTokenInvalido } from '../auth/authSessionEvents';
+import { emitSyncStatusChange } from './syncStatusEmitter';
+import { getUsuarioAtualIdLocal } from '../auth/authState';
 
 let syncEmAndamento = false;
-const SYNC_ENABLED = true; // ✅ reativado
+const SYNC_ENABLED = true;
 
 export interface ResultadoSync {
   sucesso: number;
   falhas: number;
 }
 
-// Helper: pega o usuário logado atual (necessário pois storage.ts agora
-// é multiusuário e exige userId em todas as suas funções).
-// ✅ Usa getSession() (leitura local) em vez de getUser() (bate no servidor),
-// para que push/pull/contadores funcionem também no modo offline.
+// Se o erro for de JWT expirado/401, pede ao AuthContext para revalidar o token em
+// silêncio (NÃO desloga o usuário). Retorna true se tratou o erro: quem chamou deve
+// interromper esta rodada; a próxima rodada do auto-sync já encontra o token renovado.
+function tratarErroSeForDeAuth(error: any): boolean {
+  if (isErroTokenInvalido(error)) {
+    emitSessaoInvalida();
+    return true;
+  }
+  return false;
+}
+
 async function getUsuarioAtualId(): Promise<string> {
+  // Fonte da verdade: identidade local mantida pelo AuthContext (funciona offline).
+  // O getSession() do supabase-js devolve null com token expirado + sem rede.
+  const local = getUsuarioAtualIdLocal();
+  if (local) return local;
+
   const { data } = await supabase.auth.getSession();
   const userId = data.session?.user?.id;
   if (!userId) throw new Error('Usuário não autenticado.');
   return userId;
 }
+
 
 export async function marcarComoPendente(loteId: string): Promise<void> {
   const userId = await getUsuarioAtualId();
@@ -51,6 +67,7 @@ export async function enviarLotesPendentes(
   if (syncEmAndamento) return { sucesso: 0, falhas: 0 };
   syncEmAndamento = true;
 
+
   let sucesso = 0;
   let falhas = 0;
 
@@ -63,9 +80,6 @@ export async function enviarLotesPendentes(
 
     for (const lote of pendentes) {
       try {
-        // 👇 Se o lote tem empresaId próprio (foi criado por uma empresa
-        // "Integracao" para uma empresa "Integrado" vinculada), usamos esse
-        // valor. Caso contrário, usamos o empresaId do usuário logado.
         const empresaIdDestino = lote.empresaId ?? empresaId;
 
         const payload: Record<string, any> = {
@@ -86,6 +100,9 @@ export async function enviarLotesPendentes(
           .maybeSingle();
 
         if (checkError) {
+          if (tratarErroSeForDeAuth(checkError)) {
+            return { sucesso, falhas };
+          }
           await upsertLote(userId, {
             ...lote,
             syncStatus: 'erro',
@@ -112,6 +129,9 @@ export async function enviarLotesPendentes(
         }
 
         if (error) {
+          if (tratarErroSeForDeAuth(error)) {
+            return { sucesso, falhas };
+          }
           await upsertLote(userId, {
             ...lote,
             syncStatus: 'erro',
@@ -123,15 +143,17 @@ export async function enviarLotesPendentes(
         }
 
         const { data: atual, error: fetchError } = await supabase
-  .from('lotes')
-  .select('owner_id, liberado, liberado_em, liberado_por, perfis!owner_id(nome)')
-  .eq('id', lote.id)
-  .single();
+          .from('lotes')
+          .select('owner_id, liberado, liberado_em, liberado_por, perfis!owner_id(nome)')
+          .eq('id', lote.id)
+          .single();
 
-if (fetchError) {
-  console.log('Erro ao buscar dados atualizados do lote:', fetchError.message);
-}
-
+        if (fetchError) {
+          if (tratarErroSeForDeAuth(fetchError)) {
+            return { sucesso, falhas };
+          }
+          console.log('Erro ao buscar dados atualizados do lote:', fetchError.message);
+        }
 
         const ownerNome = (atual as any)?.perfis?.nome ?? null;
 
@@ -164,8 +186,6 @@ if (fetchError) {
   return { sucesso, falhas };
 }
 
-
-
 // ---------- PULL ----------
 export async function baixarLotesDoServidor(empresaId: string): Promise<ResultadoSync> {
   if (!SYNC_ENABLED) return { sucesso: 0, falhas: 0 };
@@ -176,7 +196,6 @@ export async function baixarLotesDoServidor(empresaId: string): Promise<Resultad
   try {
     const userId = await getUsuarioAtualId();
 
-    // Busca empresas "Integrado" vinculadas a esta (se ela for "Integracao")
     const { data: vinculadas } = await listarEmpresasVinculadas(empresaId);
     const empresaIds = [empresaId, ...(vinculadas?.map((e) => e.id) ?? [])];
 
@@ -185,17 +204,28 @@ export async function baixarLotesDoServidor(empresaId: string): Promise<Resultad
       .select('id, owner_id, liberado, liberado_em, liberado_por, data')
       .in('empresa_id', empresaIds);
 
-    if (error || !remotos) {
+    if (error) {
+      if (tratarErroSeForDeAuth(error)) {
+        return { sucesso, falhas };
+      }
       falhas++;
       return { sucesso, falhas };
     }
 
-    // ✅ Busca os nomes de todos os owners envolvidos, de uma vez só
+    if (!remotos) {
+      falhas++;
+      return { sucesso, falhas };
+    }
+
     const ownerIds = Array.from(new Set(remotos.map((r) => r.owner_id).filter(Boolean)));
-    const { data: perfis } = await supabase
+    const { data: perfis, error: perfisError } = await supabase
       .from('perfis')
       .select('id, nome')
       .in('id', ownerIds);
+
+    if (perfisError && tratarErroSeForDeAuth(perfisError)) {
+      return { sucesso, falhas };
+    }
 
     const mapaNomes = new Map((perfis || []).map((p) => [p.id, p.nome]));
 
@@ -214,7 +244,7 @@ export async function baixarLotesDoServidor(empresaId: string): Promise<Resultad
           await upsertLote(userId, {
             ...loteRemoto,
             ownerId: remoto.owner_id,
-            ownerNome: mapaNomes.get(remoto.owner_id) ?? null, // ← ADICIONADO
+            ownerNome: mapaNomes.get(remoto.owner_id) ?? null,
             liberado: remoto.liberado ?? false,
             liberadoEm: remoto.liberado_em ?? null,
             liberadoPor: remoto.liberado_por ?? null,
@@ -235,9 +265,6 @@ export async function baixarLotesDoServidor(empresaId: string): Promise<Resultad
   return { sucesso, falhas };
 }
 
-
-
-
 export async function enviarFaixaConfortoPendente(empresaId: string): Promise<void> {
   try {
     const userId = await getUsuarioAtualId();
@@ -253,9 +280,13 @@ export async function enviarFaixaConfortoPendente(empresaId: string): Promise<vo
         { onConflict: 'empresa_id' }
       );
 
-    if (!error) {
-      await limparFaixaConfortoPendente(userId);
+    if (error) {
+      if (tratarErroSeForDeAuth(error)) return;
+      console.log('Erro ao sincronizar faixa de conforto (push):', error.message);
+      return;
     }
+
+    await limparFaixaConfortoPendente(userId);
   } catch (e) {
     console.log('Erro ao sincronizar faixa de conforto (push):', e);
   }
@@ -266,8 +297,6 @@ export async function baixarFaixaConforto(empresaId: string): Promise<void> {
   try {
     const userId = await getUsuarioAtualId();
 
-    // Se há alteração local pendente, não sobrescreve — evita perder
-    // uma configuração feita offline que ainda não foi enviada.
     const pendente = await isFaixaConfortoPendente(userId);
     if (pendente) return;
 
@@ -277,7 +306,13 @@ export async function baixarFaixaConforto(empresaId: string): Promise<void> {
       .eq('empresa_id', empresaId)
       .maybeSingle();
 
-    if (error || !data) return;
+    if (error) {
+      if (tratarErroSeForDeAuth(error)) return;
+      console.log('Erro ao sincronizar faixa de conforto (pull):', error.message);
+      return;
+    }
+
+    if (!data) return;
 
     await salvarFaixaConfortoLocal(userId, data.pontos);
   } catch (e) {
@@ -290,18 +325,22 @@ export async function sincronizarTudo(
   empresaId: string,
   ownerId: string
 ): Promise<{ push: ResultadoSync; pull: ResultadoSync }> {
-  const push = await enviarLotesPendentes(empresaId, ownerId);
+  emitSyncStatusChange(true); // 👈 novo: início do ciclo completo
 
-  // ✅ Envia exclusões pendentes antes do pull, para não trazer de volta
-  // um lote que já foi excluído localmente.
-  await enviarExclusoesPendentes();
+  try {
+    const push = await enviarLotesPendentes(empresaId, ownerId);
 
-  const pull = await baixarLotesDoServidor(empresaId);
+    await enviarExclusoesPendentes();
 
-  await enviarFaixaConfortoPendente(empresaId);
-  await baixarFaixaConforto(empresaId);
+    const pull = await baixarLotesDoServidor(empresaId);
 
-  return { push, pull };
+    await enviarFaixaConfortoPendente(empresaId);
+    await baixarFaixaConforto(empresaId);
+
+    return { push, pull };
+  } finally {
+    emitSyncStatusChange(false); 
+  }
 }
 
 
@@ -314,7 +353,14 @@ export async function revalidarLicenca(empresaId: string): Promise<{ liberado: b
       .eq('empresa_id', empresaId)
       .single();
 
-    if (error || !data) return { liberado: false, motivo: 'Licença não encontrada.' };
+    if (error) {
+      if (tratarErroSeForDeAuth(error)) {
+        return { liberado: false, motivo: 'Sessão expirada.' };
+      }
+      return { liberado: false, motivo: 'Licença não encontrada.' };
+    }
+
+    if (!data) return { liberado: false, motivo: 'Licença não encontrada.' };
 
     const hoje = new Date();
 
@@ -324,7 +370,10 @@ export async function revalidarLicenca(empresaId: string): Promise<{ liberado: b
       fimTrial.setDate(fimTrial.getDate() + (data.trial_dias ?? 14));
       const trialValido = hoje <= fimTrial;
       const limiteOk = (data.lotes_gerados ?? 0) < (data.limite_lotes ?? 3);
-      return { liberado: trialValido && limiteOk, motivo: !trialValido ? 'Trial expirado.' : !limiteOk ? 'Limite de lotes atingido.' : undefined };
+      return {
+        liberado: trialValido && limiteOk,
+        motivo: !trialValido ? 'Trial expirado.' : !limiteOk ? 'Limite de lotes atingido.' : undefined,
+      };
     }
 
     if (data.status === 'ativa') {
@@ -362,6 +411,9 @@ export async function enviarExclusoesPendentes(): Promise<ResultadoSync> {
           await limparExclusaoPendente(userId, loteId);
           sucesso++;
         } else {
+          if (tratarErroSeForDeAuth(error)) {
+            return { sucesso, falhas };
+          }
           falhas++;
         }
       } catch {

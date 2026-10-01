@@ -6,9 +6,12 @@ import { Link2 } from 'lucide-react-native';
 import { COLORS } from '../theme/colors';
 import { listarSolicitacoesPendentes } from '../services/empresas';
 import { supabase } from '../lib/supabase';
+import { useExigirOnline } from '../hooks/useExigirOnline';
 
 export function SolicitacoesPendentesBanner({ empresaId }: { empresaId: string | null }) {
   const navigation = useNavigation<any>();
+  const exigirOnline = useExigirOnline();
+  const [verificando, setVerificando] = useState(false);
   const [quantidade, setQuantidade] = useState(0);
 
   const carregar = useCallback(async () => {
@@ -48,11 +51,23 @@ export function SolicitacoesPendentesBanner({ empresaId }: { empresaId: string |
     };
   }, [empresaId, carregar]);
 
+  async function abrirSolicitacoes() {
+    if (verificando) return; // evita toque duplo durante a checagem
+    setVerificando(true);
+    try {
+      if (!(await exigirOnline('Solicitações de vínculo'))) return;
+      navigation.navigate('SolicitacoesVinculo');
+    } finally {
+      setVerificando(false);
+    }
+  }
+
   if (quantidade === 0) return null;
 
   return (
     <TouchableOpacity
-      onPress={() => navigation.navigate('SolicitacoesVinculo')}
+      onPress={abrirSolicitacoes}
+      disabled={verificando}
       style={{
         flexDirection: 'row',
         alignItems: 'center',
