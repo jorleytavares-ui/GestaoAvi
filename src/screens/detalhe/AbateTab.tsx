@@ -3,7 +3,7 @@ import { Toast } from '../../components/Toast';
 import { useToast } from '../../hooks/useToast';
 
 import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, Pressable, TextInput } from 'react-native';
+import { View, Text, StyleSheet, Pressable, TextInput, Alert } from 'react-native';
 
 import { useFocusEffect } from '@react-navigation/native';
 import type { MaterialTopTabScreenProps } from '@react-navigation/material-top-tabs';
@@ -59,6 +59,14 @@ function dateToHoraStr(d: Date | null): string {
   const hh = String(d.getHours()).padStart(2, '0');
   const mi = String(d.getMinutes()).padStart(2, '0');
   return `${hh}:${mi}`;
+}
+
+// ---------- Helper de confirmação (Alert) ----------
+function confirmar(titulo: string, mensagem: string, onConfirmar: () => void) {
+  Alert.alert(titulo, mensagem, [
+    { text: 'Cancelar', style: 'cancel' },
+    { text: 'Confirmar', style: 'destructive', onPress: onConfirmar },
+  ]);
 }
 
 type DataHora = { data: Date | null; hora: Date | null };
@@ -129,10 +137,32 @@ export function AbateTab({ route }: Props) {
 
   if (!lote) return null;
 
+  const nomeGalpao = (galpaoId: string) =>
+    lote.galpoes.find((g: any) => g.id === galpaoId)?.nome || galpaoId;
+
   const embarques = [...((lote as any).embarques || [])].sort((a: any, b: any) => a.data.localeCompare(b.data));
   const medicamentos = [...((lote as any).medicamentosAbate || [])].sort((a: any, b: any) =>
     (b.dataInicio || '').localeCompare(a.dataInicio || '')
   );
+
+  // ---------- Registros salvos (lista) por card ----------
+  const registrosSaida = ((lote as any).saidaAves || [])
+    .filter((s: any) => s.data)
+    .sort((a: any, b: any) => a.galpaoId.localeCompare(b.galpaoId));
+
+  const registrosSilo = ((lote as any).retiradaSilo || [])
+    .filter((s: any) => s.data)
+    .sort((a: any, b: any) => a.galpaoId.localeCompare(b.galpaoId));
+
+  const registrosLinha = ((lote as any).retiradaLinha || [])
+    .filter((s: any) => s.data)
+    .sort((a: any, b: any) => a.galpaoId.localeCompare(b.galpaoId));
+
+  const registrosSobras = ((lote as any).sobrasAves || [])
+    .filter((s: any) => s.mortas || s.vivas || s.aleijados || s.refugos)
+    .sort((a: any, b: any) => a.galpaoId.localeCompare(b.galpaoId));
+
+  const observacaoSalva: string = (lote as any).observacaoAbate || '';
 
   const itensEmbarques = embarques.map((e: any) => ({
     id: e.id,
@@ -148,7 +178,7 @@ export function AbateTab({ route }: Props) {
     ].filter(Boolean).join(' · '),
   }));
 
-  const salvarSaida = async () => {
+  const executarSalvarSaida = async () => {
     if (!userId) return;
     try {
       await setSaidaAves(
@@ -162,13 +192,15 @@ export function AbateTab({ route }: Props) {
       );
       carregar();
       showToast('Data e horário de saída das aves salvos com sucesso.', 'success');
+      Alert.alert('Gravação confirmada', 'A saída das aves foi salva com sucesso.');
     } catch (e) {
       console.log('Erro ao salvar saída das aves:', e);
       showToast('Não foi possível salvar a saída das aves.', 'error');
     }
   };
+  const salvarSaida = executarSalvarSaida;
 
-  const salvarSilo = async () => {
+  const executarSalvarSilo = async () => {
     if (!userId) return;
     try {
       await setRetiradaSilo(
@@ -182,13 +214,15 @@ export function AbateTab({ route }: Props) {
       );
       carregar();
       showToast('Retirada de ração (silo) salva com sucesso.', 'success');
+      Alert.alert('Gravação confirmada', 'A retirada de ração (silo) foi salva com sucesso.');
     } catch (e) {
       console.log('Erro ao salvar retirada de ração (silo):', e);
       showToast('Não foi possível salvar a retirada de ração (silo).', 'error');
     }
   };
+  const salvarSilo = executarSalvarSilo;
 
-  const salvarLinha = async () => {
+  const executarSalvarLinha = async () => {
     if (!userId) return;
     try {
       await setRetiradaLinha(
@@ -202,13 +236,15 @@ export function AbateTab({ route }: Props) {
       );
       carregar();
       showToast('Retirada de ração (linha) salva com sucesso.', 'success');
+      Alert.alert('Gravação confirmada', 'A retirada de ração (linha) foi salva com sucesso.');
     } catch (e) {
       console.log('Erro ao salvar retirada de ração (linha):', e);
       showToast('Não foi possível salvar a retirada de ração (linha).', 'error');
     }
   };
+  const salvarLinha = executarSalvarLinha;
 
-  const salvarSobras = async () => {
+  const executarSalvarSobras = async () => {
     if (!userId) return;
     try {
       await setSobrasAves(
@@ -224,13 +260,15 @@ export function AbateTab({ route }: Props) {
       );
       carregar();
       showToast('Sobras de aves salvas com sucesso.', 'success');
+      Alert.alert('Gravação confirmada', 'As sobras de aves foram salvas com sucesso.');
     } catch (e) {
       console.log('Erro ao salvar sobras de aves:', e);
       showToast('Não foi possível salvar as sobras de aves.', 'error');
     }
   };
+  const salvarSobras = executarSalvarSobras;
 
-  const salvarEmbarque = async () => {
+  const executarSalvarEmbarque = async () => {
     if (!userId) return;
     if (!embGalpaoId || !embData) {
       showToast('Selecione o galpão e a data do embarque.', 'error');
@@ -251,29 +289,36 @@ export function AbateTab({ route }: Props) {
       setEmbData(null); setEmbHora(null); setEmbPorta(''); setEmbCaixas(''); setEmbVazias(''); setEmbPlaca(''); setEmbObs('');
       carregar();
       showToast('Embarque adicionado com sucesso.', 'success');
+      Alert.alert('Gravação confirmada', 'O embarque foi adicionado com sucesso.');
     } catch (e) {
       console.log('Erro ao salvar embarque:', e);
       showToast('Não foi possível salvar o embarque.', 'error');
     }
   };
-
-  const excluirEmbarque = async (item: any) => {
-    if (!userId) return;
-    try {
-      await removeEmbarque(userId, loteId, item.id);
-      carregar();
-    } catch (e) {
-      console.log('Erro ao excluir embarque:', e);
-      showToast('Não foi possível excluir o embarque.', 'error');
-    }
-  };
-
-  const salvarMedicamento = async () => {
-    if (!userId) return;
-    if (!medNome.trim()) {
-      showToast('Informe o nome do medicamento.', 'error');
+  const salvarEmbarque = () => {
+    if (!embGalpaoId || !embData) {
+      showToast('Selecione o galpão e a data do embarque.', 'error');
       return;
     }
+    executarSalvarEmbarque();
+  };
+
+  const excluirEmbarque = (item: any) => {
+    confirmar('Excluir embarque', 'Tem certeza que deseja excluir este embarque? Esta ação não pode ser desfeita.', async () => {
+      if (!userId) return;
+      try {
+        await removeEmbarque(userId, loteId, item.id);
+        carregar();
+        showToast('Embarque excluído com sucesso.', 'success');
+      } catch (e) {
+        console.log('Erro ao excluir embarque:', e);
+        showToast('Não foi possível excluir o embarque.', 'error');
+      }
+    });
+  };
+
+  const executarSalvarMedicamento = async () => {
+    if (!userId) return;
     try {
       await addMedicamentoAbate(userId, loteId, {
         id: uid(),
@@ -285,32 +330,61 @@ export function AbateTab({ route }: Props) {
       setMedNome(''); setMedInicio(null); setMedFim(null); setMedDose('');
       carregar();
       showToast('Medicamento adicionado com sucesso.', 'success');
+      Alert.alert('Gravação confirmada', 'O medicamento foi adicionado com sucesso.');
     } catch (e) {
       console.log('Erro ao salvar medicamento:', e);
       showToast('Não foi possível salvar o medicamento.', 'error');
     }
   };
-
-  const excluirMedicamento = async (id: string) => {
-    if (!userId) return;
-    try {
-      await removeMedicamentoAbate(userId, loteId, id);
-      carregar();
-    } catch (e) {
-      console.log('Erro ao excluir medicamento:', e);
-      showToast('Não foi possível excluir o medicamento.', 'error');
+  const salvarMedicamento = () => {
+    if (!medNome.trim()) {
+      showToast('Informe o nome do medicamento.', 'error');
+      return;
     }
+    executarSalvarMedicamento();
   };
 
-  const salvarObs = async () => {
+  const excluirMedicamento = (id: string) => {
+    confirmar('Excluir medicamento', 'Tem certeza que deseja excluir este medicamento? Esta ação não pode ser desfeita.', async () => {
+      if (!userId) return;
+      try {
+        await removeMedicamentoAbate(userId, loteId, id);
+        carregar();
+        showToast('Medicamento excluído com sucesso.', 'success');
+      } catch (e) {
+        console.log('Erro ao excluir medicamento:', e);
+        showToast('Não foi possível excluir o medicamento.', 'error');
+      }
+    });
+  };
+
+  const executarSalvarObs = async () => {
     if (!userId) return;
     try {
       await setObservacaoAbate(userId, loteId, obs);
+      carregar();
       showToast('Observação salva com sucesso.', 'success');
+      Alert.alert('Gravação confirmada', 'A observação foi salva com sucesso.');
     } catch (e) {
       console.log('Erro ao salvar observação:', e);
       showToast('Não foi possível salvar a observação.', 'error');
     }
+  };
+  const salvarObs = executarSalvarObs;
+
+  const excluirObs = () => {
+    confirmar('Excluir observação', 'Tem certeza que deseja excluir esta observação? Esta ação não pode ser desfeita.', async () => {
+      if (!userId) return;
+      try {
+        await setObservacaoAbate(userId, loteId, '');
+        setObs('');
+        carregar();
+        showToast('Observação excluída com sucesso.', 'success');
+      } catch (e) {
+        console.log('Erro ao excluir observação:', e);
+        showToast('Não foi possível excluir a observação.', 'error');
+      }
+    });
   };
 
   return (
@@ -350,6 +424,20 @@ export function AbateTab({ route }: Props) {
           </View>
         ))}
         <SalvarButton onPress={salvarSaida} />
+
+        {registrosSaida.length > 0 && (
+          <View style={styles.listaSalva}>
+            <Text style={styles.listaTitulo}>Registros salvos</Text>
+            {registrosSaida.map((r: any) => (
+              <View key={r.galpaoId} style={styles.itemBox}>
+                <Text style={styles.itemTitulo}>{nomeGalpao(r.galpaoId)}</Text>
+                <Text style={styles.itemSub}>
+                  {fmtDateBR(r.data)}{r.hora ? ` · ${r.hora}` : ''}
+                </Text>
+              </View>
+            ))}
+          </View>
+        )}
       </View>
 
       {/* Retirada de ração — Silo */}
@@ -379,6 +467,20 @@ export function AbateTab({ route }: Props) {
           </View>
         ))}
         <SalvarButton onPress={salvarSilo} />
+
+        {registrosSilo.length > 0 && (
+          <View style={styles.listaSalva}>
+            <Text style={styles.listaTitulo}>Registros salvos</Text>
+            {registrosSilo.map((r: any) => (
+              <View key={r.galpaoId} style={styles.itemBox}>
+                <Text style={styles.itemTitulo}>{nomeGalpao(r.galpaoId)}</Text>
+                <Text style={styles.itemSub}>
+                  {fmtDateBR(r.data)}{r.hora ? ` · ${r.hora}` : ''}
+                </Text>
+              </View>
+            ))}
+          </View>
+        )}
       </View>
 
       {/* Retirada de ração — Linha de ração */}
@@ -408,6 +510,20 @@ export function AbateTab({ route }: Props) {
           </View>
         ))}
         <SalvarButton onPress={salvarLinha} />
+
+        {registrosLinha.length > 0 && (
+          <View style={styles.listaSalva}>
+            <Text style={styles.listaTitulo}>Registros salvos</Text>
+            {registrosLinha.map((r: any) => (
+              <View key={r.galpaoId} style={styles.itemBox}>
+                <Text style={styles.itemTitulo}>{nomeGalpao(r.galpaoId)}</Text>
+                <Text style={styles.itemSub}>
+                  {fmtDateBR(r.data)}{r.horaSubirLinhas ? ` · ${r.horaSubirLinhas}` : ''}
+                </Text>
+              </View>
+            ))}
+          </View>
+        )}
       </View>
 
       {/* Embarque das aves */}
@@ -514,6 +630,20 @@ export function AbateTab({ route }: Props) {
           </View>
         ))}
         <SalvarButton onPress={salvarSobras} />
+
+        {registrosSobras.length > 0 && (
+          <View style={styles.listaSalva}>
+            <Text style={styles.listaTitulo}>Registros salvos</Text>
+            {registrosSobras.map((r: any) => (
+              <View key={r.galpaoId} style={styles.itemBox}>
+                <Text style={styles.itemTitulo}>{nomeGalpao(r.galpaoId)}</Text>
+                <Text style={styles.itemSub}>
+                  Mortas {r.mortas} · Vivas {r.vivas} · Aleijados {r.aleijados} · Refugos {r.refugos}
+                </Text>
+              </View>
+            ))}
+          </View>
+        )}
       </View>
 
       {/* Medicamentos — período e dosagem */}
@@ -563,6 +693,21 @@ export function AbateTab({ route }: Props) {
         <View style={{ marginTop: 8 }}>
           <SalvarButton onPress={salvarObs} />
         </View>
+
+        {observacaoSalva.trim().length > 0 && (
+          <View style={styles.listaSalva}>
+            <Text style={styles.listaTitulo}>Registro salvo</Text>
+            <View style={styles.itemBox}>
+              <View style={styles.itemHeader}>
+                <Text style={styles.itemTitulo}>Observação atual</Text>
+                <Pressable onPress={excluirObs} style={{ padding: 4 }}>
+                  <Trash2 size={17} color={COLORS.alert} />
+                </Pressable>
+              </View>
+              <Text style={styles.itemSub}>{observacaoSalva}</Text>
+            </View>
+          </View>
+        )}
       </View>
     </View>
   );
@@ -587,6 +732,8 @@ const styles = StyleSheet.create({
   itemHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   itemTitulo: { fontSize: 12.5, fontWeight: '700', color: COLORS.ink },
   itemSub: { fontSize: 12, color: COLORS.inkSoft, marginTop: 2 },
+  listaSalva: { marginTop: 14, paddingTop: 12, borderTopWidth: 1, borderTopColor: COLORS.line },
+  listaTitulo: { fontSize: 12.5, fontWeight: '700', color: COLORS.inkSoft, marginBottom: 6 },
   input: {
     borderWidth: 1,
     borderColor: COLORS.line,

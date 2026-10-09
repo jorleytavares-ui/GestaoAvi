@@ -30,12 +30,30 @@ interface GalpaoFormData {
   racaoLinhasIncentivoQtd: string;
 }
 
+// ---------- Helpers de data/hora sem deslocamento de fuso ----------
 function hhmmParaDate(hhmm: string | null): Date | null {
   if (!hhmm) return null;
   const [h, m] = hhmm.split(':').map(Number);
   const d = new Date();
   d.setHours(h, m, 0, 0);
   return d;
+}
+
+// Converte "YYYY-MM-DD" em Date local (evita o deslocamento causado por new Date(string) usar UTC)
+function parseDataLocalISO(dataStr: string): Date {
+  const [y, m, d] = dataStr.split('-').map(Number);
+  const dt = new Date();
+  dt.setFullYear(y, (m || 1) - 1, d || 1);
+  dt.setHours(0, 0, 0, 0);
+  return dt;
+}
+
+// Converte Date -> "YYYY-MM-DD" usando componentes locais (evita toISOString() deslocar o dia)
+function dateParaISOLocal(d: Date): string {
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
 }
 
 function galpaoParaFormData(g: Galpao): GalpaoFormData {
@@ -101,7 +119,7 @@ export function NovoLoteForm({
     (loteInicial?.sexagem as any) ?? 'misto'
   );
   const [dataAlojamento, setDataAlojamento] = useState<Date>(
-    loteInicial?.dataAlojamento ? new Date(loteInicial.dataAlojamento) : new Date()
+    loteInicial?.dataAlojamento ? parseDataLocalISO(loteInicial.dataAlojamento) : new Date()
   );
   const [horaCarregamento, setHoraCarregamento] = useState<Date | null>(
     hhmmParaDate(loteInicial?.horaCarregamento ?? null)
@@ -130,7 +148,7 @@ export function NovoLoteForm({
 
   const totalAves = galpoes.reduce((s, g) => s + (Number(g.quantidadeAlojada) || 0), 0);
 
-  const toISO = (d: Date) => d.toISOString().slice(0, 10);
+  const toISO = (d: Date) => dateParaISOLocal(d);
   const toHHMM = (d: Date | null) =>
     d ? d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : null;
 

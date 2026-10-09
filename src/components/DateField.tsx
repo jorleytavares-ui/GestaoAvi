@@ -96,11 +96,46 @@ export function DateField({
     );
   }
 
-  // ---------- MOBILE (iOS / Android) ----------
+  // ---------- ANDROID (API imperativa — evita bugs do modo declarativo) ----------
+  if (Platform.OS === 'android') {
+    const { DateTimePickerAndroid } = require('@react-native-community/datetimepicker');
+
+    const abrirPicker = () => {
+      DateTimePickerAndroid.open({
+        value: value || new Date(),
+        mode,
+        is24Hour: true,
+        minimumDate,
+        maximumDate,
+        onChange: (event: any, selected?: Date) => {
+          // Só aplica quando o usuário realmente confirmou a escolha.
+          if (event?.type === 'set' && selected) {
+            onChange(selected);
+          }
+        },
+      });
+    };
+
+    return (
+      <View>
+        <Text style={styles.label}>
+          {label}
+          {optional ? ' — opcional' : ''}
+        </Text>
+        <TouchableOpacity style={styles.input} onPress={abrirPicker}>
+          <Text style={{ fontSize: 15, color: value ? COLORS.ink : COLORS.inkSoft }}>
+            {value ? (mode === 'date' ? fmtDate(value) : fmtTime(value)) : 'Selecionar'}
+          </Text>
+          <Icon size={16} color={COLORS.inkSoft} />
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  // ---------- iOS (modo declarativo com spinner) ----------
   const DateTimePicker = require('@react-native-community/datetimepicker').default;
 
   const handleChange = (_event: any, selected?: Date) => {
-    if (Platform.OS === 'android') setShow(false);
     if (selected) onChange(selected);
   };
 
@@ -121,7 +156,7 @@ export function DateField({
         <DateTimePicker
           value={value || new Date()}
           mode={mode}
-          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+          display="spinner"
           onChange={handleChange}
           minimumDate={minimumDate}
           maximumDate={maximumDate}

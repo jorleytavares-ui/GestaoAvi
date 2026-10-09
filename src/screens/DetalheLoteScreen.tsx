@@ -45,6 +45,13 @@ const ABAS: { key: string; label: string; Comp: AbaComp }[] = [
   { key: 'Abate', label: 'Abate', Comp: AbateTab },
 ] as const;
 
+function fmtDataBR(dataStr?: string | null): string {
+  if (!dataStr) return '—';
+  const [y, m, d] = dataStr.split('-');
+  if (!y || !m || !d) return dataStr;
+  return `${d}/${m}/${y}`;
+}
+
 function AvisoLoteLiberado({
   lote,
   usuarioId,
@@ -68,7 +75,7 @@ function AvisoLoteLiberado({
     setCarregando(true);
     try {
       await assumirLote(lote.id);
-      await onAssumido(); // 👈 espera recarregar antes de seguir
+      await onAssumido();
       alertaUniversal('Sucesso', 'Você assumiu o lote com sucesso!');
     } catch (e: any) {
       alertaUniversal('Não foi possível assumir o lote', e.message);
@@ -180,7 +187,6 @@ export function DetalheLoteScreen({ route, navigation }: Props) {
               )}
             </Text>
 
-            {/* 👇 NOVO: Nº da granja (vem de data.nGranja) */}
             {(lote as any).nGranja !== undefined && (
               <View style={styles.linhaInfo}>
                 <Text style={styles.infoLabel}>Nº da granja</Text>
@@ -192,7 +198,7 @@ export function DetalheLoteScreen({ route, navigation }: Props) {
 
             <View style={styles.linhaInfo}>
               <Text style={styles.infoLabel}>Data de alojamento</Text>
-              <Text style={styles.infoValor}>{lote.dataAlojamento}</Text>
+              <Text style={styles.infoValor}>{fmtDataBR(lote.dataAlojamento)}</Text>
             </View>
             <View style={styles.divisor} />
 
