@@ -213,6 +213,26 @@ export interface GeradoPor {
   funcao: string;
 }
 
+// ---------- Checklist de Remuneração ----------
+export interface ChecklistRemuneracaoQualificadores {
+  respostas: Record<string, boolean>;
+  aprovado: boolean;
+  data: string;
+}
+
+export interface ChecklistRemuneracaoBloco {
+  respostas: Record<string, boolean>;
+}
+
+export interface ChecklistRemuneracao {
+  qualificadores: ChecklistRemuneracaoQualificadores;
+  estrutural?: ChecklistRemuneracaoBloco;
+  procedimentos?: ChecklistRemuneracaoBloco;
+  sustentabilidade?: ChecklistRemuneracaoBloco;
+  finalizado: boolean;
+  dataFinalizacao?: string | null;
+}
+
 export interface Lote {
   id: string;
   numero: string;
@@ -234,6 +254,7 @@ horaLeituraAgua?: string | null;
   medicamentosTerapeuticos?: MedicamentoTerapeutico[];
   produtosQuimicos?: ProdutoQuimico[];
   estoquesRacao?: EstoqueRacao[];
+  checklistRemuneracao?: ChecklistRemuneracao | null;
   syncStatus?: 'pendente' | 'sincronizado' | 'erro';
   syncError?: string | null;
   syncUpdatedAt?: string | null;
@@ -402,11 +423,9 @@ export interface ConversaoAjustadaResult {
   racaoConsumidaRealKg: number;
   avesVivas: number;
   pesoMedioG: number | null;
-  pesoVivoTotalKg: number | null;   // <- faltava o "| null;" completo aqui
+  pesoVivoTotalKg: number | null;
   conversaoAjustada: number | null;
 }
-
-// ---------- Conversão ajustada (descontando estoque) ----------
 
 export function conversaoAjustadaNaData(
   lote: Lote,
@@ -735,4 +754,3 @@ export const DEFAULT_FAIXA_CONFORTO: PontoFaixaConforto[] = [
   { idade: 42, tempMin: 20, tempMax: 22 },
   { idade: 56, tempMin: 20, tempMax: 22 },
 ];
-

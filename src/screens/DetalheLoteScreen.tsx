@@ -24,6 +24,7 @@ import { GraficoComparativoTab } from './detalhe/GraficoComparativoTab';
 import { EvolucaoTab } from './detalhe/EvolucaoTab';
 import { AvaliacaoTecnicaTab } from './detalhe/AvaliacaoTecnicaTab';
 import { AbateTab } from './detalhe/AbateTab';
+import { ChecklistRemuneracaoTab } from './detalhe/ChecklistRemuneracaoTab';
 
 import { assumirLote, liberarLote, podeAssumirLote } from '../services/lotes';
 
@@ -43,6 +44,7 @@ const ABAS: { key: string; label: string; Comp: AbaComp }[] = [
   { key: 'GraficoComparativo', label: 'Gráfico', Comp: GraficoComparativoTab },
   { key: 'AvaliacaoTecnica', label: 'Avaliação', Comp: AvaliacaoTecnicaTab },
   { key: 'Abate', label: 'Abate', Comp: AbateTab },
+  { key: 'ChecklistRemuneracao', label: 'CheckList Remuneração', Comp: ChecklistRemuneracaoTab },
 ] as const;
 
 function fmtDataBR(dataStr?: string | null): string {

@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Lote, uid, Encerramento } from '../utils/calculations';
+import { Lote, uid, Encerramento, todayStr } from '../utils/calculations';
 import { DEFAULT_PESO_SEXAGEM, PontoPesoPadrao, Sexagem } from '../data/padraoSexagem';
 import { DEFAULT_FAIXA_CONFORTO, PontoFaixaConforto } from '../utils/calculations'; // ajuste se vier de outro lugar
 import { emitLocalChange } from './localChangeEmitter';
@@ -685,4 +685,51 @@ export async function setGeradoPor(
   geradoPor: { nome: string; funcao: string }
 ): Promise<Lote | undefined> {
   return updateLote(userId, loteId, (lote) => ({ ...lote, geradoPor } as Lote));
+}
+
+// ---------- Checklist de Remuneração ----------
+
+export async function setChecklistQualificadores(
+  userId: string,
+  loteId: string,
+  respostas: Record<string, boolean>
+): Promise<Lote | undefined> {
+  const aprovado =
+    Object.keys(respostas).length > 0 && Object.values(respostas).every((v) => v === true);
+
+  return updateLote(userId, loteId, (lote) => {
+    const atual = (lote as any).checklistRemuneracao;
+    const checklistRemuneracao = {
+      ...atual,
+      qualificadores: { respostas, aprovado, data: todayStr() },
+      finalizado: atual?.finalizado || false,
+    };
+    return { ...lote, checklistRemuneracao } as Lote;
+  });
+}
+
+export async function finalizarChecklistRemuneracao(
+  userId: string,
+  loteId: string,
+  blocos: {
+    estrutural: Record<string, boolean>;
+    procedimentos: Record<string, boolean>;
+    sustentabilidade: Record<string, boolean>;
+  }
+): Promise<Lote | undefined> {
+  return updateLote(userId, loteId, (lote) => {
+    const atual = (lote as any).checklistRemuneracao;
+    if (!atual?.qualificadores?.aprovado) {
+      throw new Error('O lote precisa ser aprovado nos Itens Qualificadores antes de finalizar.');
+    }
+    const checklistRemuneracao = {
+      ...atual,
+      estrutural: { respostas: blocos.estrutural },
+      procedimentos: { respostas: blocos.procedimentos },
+      sustentabilidade: { respostas: blocos.sustentabilidade },
+      finalizado: true,
+      dataFinalizacao: todayStr(),
+    };
+    return { ...lote, checklistRemuneracao } as Lote;
+  });
 }
