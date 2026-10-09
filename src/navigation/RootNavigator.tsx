@@ -23,9 +23,11 @@ import { SolicitacoesVinculoScreen } from '../screens/SolicitacoesVinculoScreen'
 import { PlanosScreen } from '../screens/PlanosScreen';
 import { EscolherPlanoScreen } from '../screens/EscolherPlanoScreen';
 import { CheckoutScreen } from '../screens/CheckoutScreen';
+import { podeGerenciarPlano } from '../constants/papeis';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const AuthStack = createNativeStackNavigator<AuthStackParamList>();
+const BlockedStack = createNativeStackNavigator();
 
 function AuthNavigator() {
   return (
@@ -69,12 +71,53 @@ function AppNavigator() {
         options={{ headerShown: true, title: 'Planos' }}
       />
       <Stack.Screen
-  name="Checkout"
-  component={CheckoutScreen}
-  options={{ headerShown: true, title: 'Finalizar assinatura' }}
-/>
+        name="Checkout"
+        component={CheckoutScreen}
+        options={{ headerShown: true, title: 'Finalizar assinatura' }}
+      />
       <Stack.Screen name="EscolherPlano" component={EscolherPlanoScreen} />
     </Stack.Navigator>
+  );
+}
+
+// Stack próprio para o estado bloqueado: assim a tela de bloqueio tem `navigation`
+// de verdade e pode ir para EscolherPlano/Checkout sem precisar do AppNavigator montado.
+function BloqueioNavigator({
+  motivo,
+  onTentarNovamente,
+  permiteAssinar,
+}: {
+  motivo: string;
+  onTentarNovamente: () => Promise<void>;
+  permiteAssinar: boolean;
+}) {
+  return (
+    <BlockedStack.Navigator screenOptions={{ headerShown: false }}>
+      <BlockedStack.Screen name="Bloqueio">
+        {({ navigation }) => (
+          <LicencaBloqueadaScreen
+            motivo={motivo}
+            onTentarNovamente={onTentarNovamente}
+            permiteAssinar={permiteAssinar}
+            navigation={navigation}
+          />
+        )}
+      </BlockedStack.Screen>
+      {/* EscolherPlano é a tela de assinatura para o usuário final.
+          PlanosScreen fica aqui só porque admins (papelId 1) nunca chegam
+          a este stack — eles nunca são bloqueados por licença. */}
+      <BlockedStack.Screen
+        name="Planos"
+        component={PlanosScreen}
+        options={{ headerShown: true, title: 'Planos' }}
+      />
+      <BlockedStack.Screen
+        name="Checkout"
+        component={CheckoutScreen}
+        options={{ headerShown: true, title: 'Finalizar assinatura' }}
+      />
+      <BlockedStack.Screen name="EscolherPlano" component={EscolherPlanoScreen} />
+    </BlockedStack.Navigator>
   );
 }
 
@@ -102,6 +145,12 @@ function LicencaGate({ children }: { children: React.ReactNode }) {
     return <>{ultimoRef.current ?? <Loading />}</>;
   }
 
+  // Só quem tem papel autorizado (ADMIN, INTEGRADO, GESTOR) pode contratar/trocar plano.
+  // Para os demais papéis (INTEGRADOR, GERENTE, VETERINARIO, GRANJEIRO), mostrar o botão
+  // "Ver planos" só levaria a um alerta de "Acesso restrito" dentro de EscolherPlanoScreen —
+  // melhor nem oferecer o botão e já orientar a falar com o responsável da empresa.
+  const podeAssinar = podeGerenciarPlano(perfil?.papelId);
+
   let node: React.ReactNode;
 
   if (admin) {
@@ -109,23 +158,30 @@ function LicencaGate({ children }: { children: React.ReactNode }) {
     node = children;
   } else if (relogioSuspeito) {
     node = (
-      <LicencaBloqueadaScreen
+      <BloqueioNavigator
         motivo="Detectamos uma alteração no relógio do aparelho. Conecte-se à internet para revalidar sua licença."
         onTentarNovamente={recarregar}
+        permiteAssinar={false}
       />
     );
   } else if (offlineSemCache) {
     node = (
-      <LicencaBloqueadaScreen
+      <BloqueioNavigator
         motivo="Conecte-se à internet ao menos uma vez neste aparelho para validar sua licença."
         onTentarNovamente={recarregar}
+        permiteAssinar={false}
       />
     );
   } else if (status === 'expirada') {
     node = (
-      <LicencaBloqueadaScreen
-        motivo="Sua licença expirou. Conecte-se à internet para renovar ou entre em contato com o suporte."
+      <BloqueioNavigator
+        motivo={
+          podeAssinar
+            ? 'Sua licença expirou. Escolha um plano para continuar usando o app, ou entre em contato com o suporte.'
+            : 'Sua licença expirou. Entre em contato com o responsável pela sua empresa para renovar o plano, ou com o suporte.'
+        }
         onTentarNovamente={recarregar}
+        permiteAssinar={podeAssinar}
       />
     );
   } else {

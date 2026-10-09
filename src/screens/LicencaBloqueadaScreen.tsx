@@ -8,9 +8,11 @@ import { useAuth } from '../auth/AuthContext';
 type Props = {
   motivo: string;
   onTentarNovamente: () => Promise<void>;
+  permiteAssinar?: boolean;
+  navigation?: any;
 };
 
-export function LicencaBloqueadaScreen({ motivo, onTentarNovamente }: Props) {
+export function LicencaBloqueadaScreen({ motivo, onTentarNovamente, permiteAssinar, navigation }: Props) {
   const { signOut } = useAuth();
   const [tentando, setTentando] = useState(false);
 
@@ -55,6 +57,25 @@ export function LicencaBloqueadaScreen({ motivo, onTentarNovamente }: Props) {
       >
         {motivo}
       </Text>
+
+      {/* Só é oferecido a quem tem papel autorizado a gerenciar plano (ADMIN/INTEGRADO/GESTOR).
+          Para os demais, o texto do `motivo` já orienta a falar com o responsável. */}
+      {permiteAssinar && (
+        <TouchableOpacity
+          onPress={() => navigation?.navigate('EscolherPlano')}
+          style={{
+            backgroundColor: COLORS.accent ?? COLORS.primary,
+            borderRadius: 10,
+            paddingVertical: 14,
+            paddingHorizontal: 32,
+            alignItems: 'center',
+            marginBottom: 16,
+            minWidth: 220,
+          }}
+        >
+          <Text style={{ color: '#fff', fontWeight: '700' }}>Ver planos</Text>
+        </TouchableOpacity>
+      )}
 
       <TouchableOpacity
         onPress={handleTentar}

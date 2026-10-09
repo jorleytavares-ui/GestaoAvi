@@ -6,6 +6,7 @@ import * as Updates from 'expo-updates';
 import "./global.css";
 
 import { RootNavigator } from './src/navigation/RootNavigator';
+import { navigationRef } from './src/navigation/navigationRef';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthProvider, useAuth } from './src/auth/AuthContext';
 import { migrarIdsInvalidosDeLotes } from './src/storage/storage';
@@ -39,7 +40,7 @@ function AppInterno() {
 
   return (
     <SafeAreaProvider>
-      <NavigationContainer>
+      <NavigationContainer ref={navigationRef}>
         <RootNavigator />
       </NavigationContainer>
 
