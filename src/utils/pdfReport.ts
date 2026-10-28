@@ -30,6 +30,123 @@ function tabelaComHeader(titulo: string, header: string[], linhas: string[][]): 
   `;
 }
 
+// ============================================================
+// Checklist de Remuneração — mesmas perguntas/pesos da aba
+// ChecklistRemuneracaoTab.tsx
+// ============================================================
+
+const CR_QUALIFICADORES = [
+  { id: 'q1', label: 'Assertividade de Peso (faixa de tolerância)' },
+  { id: 'q2', label: 'Não mistura de ração / uso correto de medicamentos' },
+  { id: 'q3', label: 'Biosseguridade mínima da granja' },
+];
+
+const CR_ESTRUTURAL = [
+  { id: 'e1', peso: 40, label: 'Equipamentos de ambiência (OT_AGR_9038)' },
+  { id: 'e2', peso: 10, label: 'Proteção de partes móveis (NR 10/12)' },
+  { id: 'e3', peso: 10, label: 'Sistema de segurança/alarme contra sinistros' },
+  { id: 'e4', peso: 20, label: 'DRs e instalações elétricas (NT_AGR_9003)' },
+  { id: 'e5', peso: 20, label: 'Local de refeições/banheiro adequado para apanha' },
+];
+
+const CR_PROCEDIMENTOS = [
+  { id: 'p1', peso: 20, label: 'Intervalo entre lotes (OT_AGR_9035)' },
+  { id: 'p2', peso: 10, label: 'Área isenta de outras espécies/aves' },
+  { id: 'p3', peso: 5, label: 'Ficha do lote preenchida e íntegra' },
+  { id: 'p4', peso: 5, label: "Uso correto de EPI's" },
+  { id: 'p5', peso: 10, label: 'Dimensionamento pinteira/cercado (OT_AGR_9037)' },
+  { id: 'p6', peso: 20, label: 'Ambiência verão/inverno (OT_AGR_9038)' },
+  { id: 'p7', peso: 5, label: 'Padrão de luz (OT_AGR_9107)' },
+  { id: 'p8', peso: 15, label: 'Qualidade da água (OT_AGR_9043)' },
+  { id: 'p9', peso: 10, label: 'Manejo adequado da cama' },
+];
+
+const CR_SUSTENTABILIDADE = [
+  { id: 's1', peso: 15, label: 'Separação/destinação correta de resíduos' },
+  { id: 's2', peso: 70, label: 'Energia alternativa (fotovoltaico/biogás) ≥80%' },
+  { id: 's3', peso: 15, label: 'Bem-estar animal (5 Liberdades, OT_AGR_9044)' },
+];
+
+function crNotaBloco(itens: { id: string; peso: number }[], respostas: Record<string, boolean>): number {
+  return itens.reduce((soma, item) => soma + (respostas[item.id] === true ? item.peso : 0), 0);
+}
+
+function crLinhasRespostas(itens: { id: string; label: string; peso?: number }[], respostas: Record<string, boolean>): string[][] {
+  return itens.map((it) => [
+    it.label,
+    it.peso !== undefined ? `${fmt(it.peso, 0)}%` : '—',
+    respostas[it.id] === true ? 'Sim' : respostas[it.id] === false ? 'Não' : '—',
+  ]);
+}
+
+function montarSecaoChecklistRemuneracao(lote: Lote): string {
+  const checklist = (lote as any).checklistRemuneracao;
+  if (!checklist?.qualificadores) return '';
+
+  const respQualif = checklist.qualificadores.respostas || {};
+  const aprovado = !!checklist.qualificadores.aprovado;
+  const finalizado = !!checklist.finalizado;
+
+  const respEstrutural = checklist.estrutural?.respostas || {};
+  const respProcedimentos = checklist.procedimentos?.respostas || {};
+  const respSustentabilidade = checklist.sustentabilidade?.respostas || {};
+
+  const notaEstrutural = crNotaBloco(CR_ESTRUTURAL, respEstrutural);
+  const notaProcedimentos = crNotaBloco(CR_PROCEDIMENTOS, respProcedimentos);
+  const notaSustentabilidade = crNotaBloco(CR_SUSTENTABILIDADE, respSustentabilidade);
+  const avaliacaoFinal = notaEstrutural * 0.2 + notaProcedimentos * 0.45 + notaSustentabilidade * 0.35;
+
+  const tabelaQualif = tabelaComHeader(
+    'Itens Qualificadores',
+    ['Pergunta', 'Peso', 'Resposta'],
+    crLinhasRespostas(CR_QUALIFICADORES, respQualif)
+  );
+
+  const statusQualif = `
+    <table style="margin-top:8px;">
+      <tr><td class="label">Resultado</td><td class="value">${aprovado ? 'Aprovado' : 'Não aprovado'}</td></tr>
+      <tr><td class="label">Data da avaliação</td><td class="value">${fmtDateBR(checklist.qualificadores.data)}</td></tr>
+    </table>
+  `;
+
+  let blocosHtml = '';
+  if (aprovado) {
+    blocosHtml = `
+      ${tabelaComHeader('Adequação Estrutural (peso 20%)', ['Pergunta', 'Peso', 'Resposta'], crLinhasRespostas(CR_ESTRUTURAL, respEstrutural))}
+      ${tabelaComHeader('Adequação de Procedimentos (peso 45%)', ['Pergunta', 'Peso', 'Resposta'], crLinhasRespostas(CR_PROCEDIMENTOS, respProcedimentos))}
+      ${tabelaComHeader('Adequação de Sustentabilidade (peso 35%)', ['Pergunta', 'Peso', 'Resposta'], crLinhasRespostas(CR_SUSTENTABILIDADE, respSustentabilidade))}
+
+      <div class="section">
+        <h3>Pontuação Obtida Total</h3>
+        <table>
+          <tr><td class="label">Adequação Estrutural (peso 20%)</td><td class="value">${fmt(notaEstrutural, 2)}%</td></tr>
+          <tr><td class="label">Adequação de Procedimentos (peso 45%)</td><td class="value">${fmt(notaProcedimentos, 2)}%</td></tr>
+          <tr><td class="label">Adequação de Sustentabilidade (peso 35%)</td><td class="value">${fmt(notaSustentabilidade, 2)}%</td></tr>
+          <tr><td class="label" style="font-weight:700;">Avaliação Final (Pontuação Obtida)</td><td class="value" style="font-size:14px;">${fmt(avaliacaoFinal, 2)}%</td></tr>
+          <tr><td class="label">Situação</td><td class="value">${finalizado ? `Finalizado em ${fmtDateBR(checklist.dataFinalizacao)}` : 'Em preenchimento'}</td></tr>
+        </table>
+      </div>
+    `;
+  } else {
+    blocosHtml = `
+      <div class="section">
+        <p style="font-size:12.5px; color:#666;">
+          O lote não foi aprovado nos Itens Qualificadores — o Ajuste de Procedimentos foi excluído, conforme regra do checklist.
+        </p>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="section">
+      <h3>CheckList de Remuneração</h3>
+      ${tabelaQualif}
+      ${statusQualif}
+      ${blocosHtml}
+    </div>
+  `;
+}
+
 export async function exportarRelatorioPdf(lote: Lote, logoBase64?: string | null) {
   try {
     const idx = computeIndices(lote);
@@ -174,6 +291,9 @@ export async function exportarRelatorioPdf(lote: Lote, logoBase64?: string | nul
       `;
     }
 
+    // ---------- CheckList de Remuneração ----------
+    const secaoChecklistRemuneracao = montarSecaoChecklistRemuneracao(lote);
+
     // 👇 Logo à esquerda; se não houver logo configurada, usa a versão pequena/colorida da splash
     const logoHtml = logoBase64
       ? `<img src="${logoBase64}" style="width:72px; height:72px; object-fit:contain; border-radius:8px;" />`
@@ -199,18 +319,13 @@ export async function exportarRelatorioPdf(lote: Lote, logoBase64?: string | nul
   content: '';
   display: ${watermarkSrc ? 'block' : 'none'};
   position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  top: 0; left: 0; right: 0; bottom: 0;
   background-image: url('${watermarkSrc ?? ''}');
   background-repeat: no-repeat;
   background-position: center center;
   background-size: 220px 233px;
-  filter: grayscale(100%);
   opacity: 0.08;
   z-index: 0;
-  pointer-events: none;
 }
 
 
@@ -290,6 +405,7 @@ export async function exportarRelatorioPdf(lote: Lote, logoBase64?: string | nul
             ${tabelaGenerica('Medicamentos Terapêuticos', linhasMedicamentos)}
             ${tabelaGenerica('Produtos Químicos', linhasQuimicos)}
             ${secaoAbate}
+            ${secaoChecklistRemuneracao}
 
             <div class="assinatura">
               <div class="linha">Responsável Técnico</div>

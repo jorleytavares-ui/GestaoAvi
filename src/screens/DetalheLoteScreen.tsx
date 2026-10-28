@@ -47,6 +47,8 @@ const ABAS: { key: string; label: string; Comp: AbaComp }[] = [
   { key: 'ChecklistRemuneracao', label: 'CheckList Remuneração', Comp: ChecklistRemuneracaoTab },
 ] as const;
 
+const TIPOS_EMPRESA_COM_PARCEIRO = ['Integracao', 'Integrado'];
+
 function fmtDataBR(dataStr?: string | null): string {
   if (!dataStr) return '—';
   const [y, m, d] = dataStr.split('-');
@@ -122,6 +124,17 @@ export function DetalheLoteScreen({ route, navigation }: Props) {
   const AbaAtivaComp = ABAS.find(a => a.key === abaAtiva)?.Comp ?? ResumoTab;
   const loteLiberado = liberandoOtimista || !!lote?.liberado;
 
+  const codigoParceiro = lote ? (lote as any).codigoParceiro : undefined;
+  const nomeIntegrado = lote ? (lote as any).empresaNome : undefined;
+  const empresaTipo = lote ? (lote as any).empresaTipo : undefined;
+  const mostrarDadosParceiro = !!empresaTipo && TIPOS_EMPRESA_COM_PARCEIRO.includes(empresaTipo);
+
+  const tecnicoResponsavelTexto = lote
+    ? loteLiberado || !lote.ownerId
+      ? 'Lote livre'
+      : lote.ownerNome || 'Usuário não identificado'
+    : '—';
+
   return (
     <View style={styles.root}>
       <AppHeader onVoltar={() => navigation.goBack()} titulo={lote ? `Lote ${lote.numero}` : 'Lote'} />
@@ -131,16 +144,7 @@ export function DetalheLoteScreen({ route, navigation }: Props) {
         {lote && (
           <View style={styles.cardTopo}>
             <View style={styles.linha}>
-              <View>
-                <Text style={styles.nomeLote}>{`Lote ${lote.numero}`}</Text>
-
-                {(lote as any).empresaNome && (
-                  <Text style={styles.integradoTexto}>
-                    Integrado:{' '}
-                    <Text style={styles.integradoValor}>{(lote as any).empresaNome}</Text>
-                  </Text>
-                )}
-              </View>
+              <Text style={styles.nomeLote}>{`Lote ${lote.numero}`}</Text>
 
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                 {user && lote.status !== 'encerrado' && (
@@ -176,26 +180,6 @@ export function DetalheLoteScreen({ route, navigation }: Props) {
               {[lote.linhagem, (lote as any).sexagem].filter(Boolean).join(' · ')}
             </Text>
 
-            <Text style={styles.responsavel}>
-              {loteLiberado || !lote.ownerId ? (
-                'Lote livre'
-              ) : (
-                <>
-                  Resp:{' '}
-                  <Text style={styles.responsavelValor}>
-                    {lote.ownerNome || 'Usuário não identificado'}
-                  </Text>
-                </>
-              )}
-            </Text>
-
-            {(lote as any).nGranja !== undefined && (
-              <View style={styles.linhaInfo}>
-                <Text style={styles.infoLabel}>Nº da granja</Text>
-                <Text style={styles.infoValor}>{(lote as any).nGranja}</Text>
-              </View>
-            )}
-
             <View style={styles.divisor} />
 
             <View style={styles.linhaInfo}>
@@ -210,11 +194,44 @@ export function DetalheLoteScreen({ route, navigation }: Props) {
             </View>
             <View style={styles.divisor} />
 
+            {mostrarDadosParceiro && (
+              <>
+                <View style={styles.linhaInfo}>
+                  <Text style={styles.infoLabel}>Número do integrado (Parceiro)</Text>
+                  <Text style={styles.infoValor}>{codigoParceiro || '—'}</Text>
+                </View>
+                <View style={styles.divisor} />
+
+                <View style={styles.linhaInfo}>
+                  <Text style={styles.infoLabel}>Nome do integrado (Parceiro)</Text>
+                  <Text style={styles.infoValor}>{nomeIntegrado || '—'}</Text>
+                </View>
+                <View style={styles.divisor} />
+              </>
+            )}
+
+            <View style={styles.linhaInfo}>
+              <Text style={styles.infoLabel}>Técnico responsável</Text>
+              <Text style={styles.infoValor}>{tecnicoResponsavelTexto}</Text>
+            </View>
+
+            {(lote as any).nGranja !== undefined && (
+              <>
+                <View style={styles.divisor} />
+                <View style={styles.linhaInfo}>
+                  <Text style={styles.infoLabel}>Nº da granja</Text>
+                  <Text style={styles.infoValor}>{(lote as any).nGranja}</Text>
+                </View>
+              </>
+            )}
+
+            <View style={styles.divisor} />
+
             <Text style={styles.secaoLabel}>GALPÕES DESTE LOTE</Text>
             {lote.galpoes.map(g => (
               <View key={g.id} style={styles.linhaInfo}>
                 <Text style={styles.infoLabel}>{g.nome}</Text>
-                <Text style={styles.infoValor}>{g.quantidadeAlojada}</Text>
+                <Text style={styles.infoValor}>{`${g.quantidadeAlojada} / ${totalAlojado}`}</Text>
               </View>
             ))}
           </View>
@@ -229,37 +246,36 @@ export function DetalheLoteScreen({ route, navigation }: Props) {
         )}
 
         {lote && user && lote.ownerId === user.id && !loteLiberado && lote.status !== 'encerrado' && (
-  <TouchableOpacity
-    style={styles.botaoLiberar}
-    onPress={() => {
-      alertaUniversal(
-        'Liberar lote',
-        'Tem certeza que deseja liberar este lote para outro usuário?',
-        [
-          { text: 'Cancelar', style: 'cancel' },
-          {
-            text: 'Liberar',
-            style: 'destructive',
-            onPress: async () => {
-              try {
-                setLiberandoOtimista(true);
-                await liberarLote(lote.id);
-                await recarregar();
-                alertaUniversal('Sucesso', 'Lote liberado com sucesso!');
-              } catch (e: any) {
-                setLiberandoOtimista(false);
-                alertaUniversal('Erro ao liberar lote', e.message);
-              }
-            },
-          },
-        ]
-      );
-    }}
-  >
-    <Text style={{ color: '#FFF' }}>Liberar lote para outro usuário</Text>
-  </TouchableOpacity>
-)}
-
+          <TouchableOpacity
+            style={styles.botaoLiberar}
+            onPress={() => {
+              alertaUniversal(
+                'Liberar lote',
+                'Tem certeza que deseja liberar este lote para outro usuário?',
+                [
+                  { text: 'Cancelar', style: 'cancel' },
+                  {
+                    text: 'Liberar',
+                    style: 'destructive',
+                    onPress: async () => {
+                      try {
+                        setLiberandoOtimista(true);
+                        await liberarLote(lote.id);
+                        await recarregar();
+                        alertaUniversal('Sucesso', 'Lote liberado com sucesso!');
+                      } catch (e: any) {
+                        setLiberandoOtimista(false);
+                        alertaUniversal('Erro ao liberar lote', e.message);
+                      }
+                    },
+                  },
+                ]
+              );
+            }}
+          >
+            <Text style={{ color: '#FFF' }}>Liberar lote para outro usuário</Text>
+          </TouchableOpacity>
+        )}
 
         {/* Grid de índices */}
         {idx && (
@@ -365,8 +381,6 @@ const styles = StyleSheet.create({
   },
   badgeStatusText: { fontSize: 10, fontWeight: '700', letterSpacing: 0.5 },
   subInfo: { fontSize: 13, color: COLORS.inkSoft, marginTop: 2 },
-  responsavel: { fontSize: 12.5, color: COLORS.inkSoft, marginTop: 6 },
-  responsavelValor: { fontWeight: '600', color: COLORS.ink },
   divisor: { height: 1, backgroundColor: COLORS.line, marginVertical: 10 },
   linhaInfo: {
     flexDirection: 'row',
@@ -452,15 +466,6 @@ const styles = StyleSheet.create({
   tabButtonTextActive: {
     color: COLORS.primary,
   },
-  integradoTexto: { fontSize: 12.5, color: COLORS.inkSoft, marginTop: 4 },
-  integradoValor: { fontWeight: '600', color: COLORS.ink },
-
-  miniStatsRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: 4,
-  },
-  miniStatItem: { flex: 1 },
 
   abaContent: {
     minHeight: 400,

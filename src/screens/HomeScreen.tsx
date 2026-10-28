@@ -33,16 +33,18 @@ export function HomeScreen({ navigation }: Props) {
   const [pendentes, setPendentes] = useState(0);
   const [erroCarregamento, setErroCarregamento] = useState<string | null>(null);
 
-  // ---- Filtros (só para Integracao) ----
+  // ---- Filtro de status (Ativos/Encerrados) — agora padrão para TODOS os tipos de usuário ----
+  const [statusFiltro, setStatusFiltro] = useState<StatusFiltro>('ativo');
+
+  // ---- Filtros extras (empresa/parceiro), exclusivos de Integração ----
   const [empresasVinculadas, setEmpresasVinculadas] = useState<EmpresaVinculada[]>([]);
   const [empresaSelecionada, setEmpresaSelecionada] = useState<EmpresaVinculada | null>(null);
   const [numeroParceiro, setNumeroParceiro] = useState('');
-  const [statusFiltro, setStatusFiltro] = useState<StatusFiltro>('ativo');
   const [modalEmpresaVisivel, setModalEmpresaVisivel] = useState(false);
 
   const [lotesEncerrados, setLotesEncerrados] = useState<Lote[]>([]);
   const [carregandoEncerrados, setCarregandoEncerrados] = useState(false);
-  
+
 
   const carregarLotes = useCallback(async () => {
     if (!userId) return;
@@ -75,7 +77,7 @@ export function HomeScreen({ navigation }: Props) {
     return unsubscribe;
   }, [carregarLotes]);
 
-  // Busca empresas vinculadas (para o dropdown)
+  // Busca empresas vinculadas (para o dropdown) — só Integração
   useEffect(() => {
     if (!isIntegracao || !empresaId) return;
     (async () => {
@@ -84,7 +86,7 @@ export function HomeScreen({ navigation }: Props) {
     })();
   }, [isIntegracao, empresaId]);
 
-  // Busca Encerrados no servidor, só quando: status = 'encerrado' + empresa selecionada
+  // Busca Encerrados no servidor, só quando: Integração + status = 'encerrado' + empresa selecionada
   useEffect(() => {
     if (!isIntegracao || statusFiltro !== 'encerrado' || !empresaSelecionada) {
       setLotesEncerrados([]);
@@ -98,48 +100,51 @@ export function HomeScreen({ navigation }: Props) {
     })();
   }, [isIntegracao, statusFiltro, empresaSelecionada]);
 
-  // Mapa empresaId -> codigo_parceiro (para filtrar Ativos localmente)
+  // Mapa empresaId -> codigo_parceiro (para filtrar Ativos localmente) — só Integração
   const mapaCodigoParceiro = useMemo(() => {
     return new Map(empresasVinculadas.map((e) => [e.id, e.codigo_parceiro ?? '']));
   }, [empresasVinculadas]);
 
   const lotesFiltrados = useMemo(() => {
-    if (!isIntegracao) return lotes; // empresas comuns: sem filtro
-
-    if (statusFiltro === 'encerrado') {
-      // já vem filtrado por empresa direto do servidor
-      if (!numeroParceiro.trim()) return lotesEncerrados;
-      const codParceiro = empresaSelecionada
-        ? (mapaCodigoParceiro.get(empresaSelecionada.id) ?? '')
-        : '';
-      return codParceiro.toLowerCase().includes(numeroParceiro.trim().toLowerCase())
-        ? lotesEncerrados
-        : [];
-    }
-
-    // status === 'ativo' -> filtro local
-    return lotes.filter((l) => {
-      if (l.status !== 'ativo') return false;
-
-      if (empresaSelecionada && (l as any).empresaId !== empresaSelecionada.id) return false;
-
-      if (numeroParceiro.trim()) {
-        const codParceiro = mapaCodigoParceiro.get((l as any).empresaId) ?? '';
-        if (!codParceiro.toLowerCase().includes(numeroParceiro.trim().toLowerCase())) return false;
+    if (isIntegracao) {
+      if (statusFiltro === 'encerrado') {
+        // já vem filtrado por empresa direto do servidor
+        if (!numeroParceiro.trim()) return lotesEncerrados;
+        const codParceiro = empresaSelecionada
+          ? (mapaCodigoParceiro.get(empresaSelecionada.id) ?? '')
+          : '';
+        return codParceiro.toLowerCase().includes(numeroParceiro.trim().toLowerCase())
+          ? lotesEncerrados
+          : [];
       }
 
-      return true;
-    });
+      // status === 'ativo' -> filtro local
+      return lotes.filter((l) => {
+        if (l.status !== 'ativo') return false;
+
+        if (empresaSelecionada && (l as any).empresaId !== empresaSelecionada.id) return false;
+
+        if (numeroParceiro.trim()) {
+          const codParceiro = mapaCodigoParceiro.get((l as any).empresaId) ?? '';
+          if (!codParceiro.toLowerCase().includes(numeroParceiro.trim().toLowerCase())) return false;
+        }
+
+        return true;
+      });
+    }
+
+    // Demais tipos de usuário: todos os lotes já estão no armazenamento local
+    // (sem necessidade de buscar "encerrados" no servidor); só filtramos por status.
+    return lotes.filter((l) => l.status === statusFiltro);
   }, [isIntegracao, statusFiltro, lotes, lotesEncerrados, empresaSelecionada, numeroParceiro, mapaCodigoParceiro]);
 
   if (carregando) return null;
 
-  const listaBase = isIntegracao ? lotesFiltrados : lotes;
-  const lotesOrdenados = [...listaBase].sort((a, b) => (a.status === 'ativo' ? -1 : 1));
+  const lotesOrdenados = [...lotesFiltrados].sort((a, b) => (a.status === 'ativo' ? -1 : 1));
 
   const mudarStatus = (novoStatus: StatusFiltro) => {
-    if (novoStatus === 'encerrado' && !empresaSelecionada) {
-      // exige selecionar o integrado antes
+    if (isIntegracao && novoStatus === 'encerrado' && !empresaSelecionada) {
+      // Integração exige selecionar o integrado antes de ver encerrados (vêm do servidor)
       setModalEmpresaVisivel(true);
       return;
     }
@@ -153,7 +158,6 @@ export function HomeScreen({ navigation }: Props) {
 
         {!isIntegracao && <StatusVinculoBanner empresaId={empresaId} />}
         {isIntegracao && <SolicitacoesPendentesBanner empresaId={empresaId} />}
-
 
         {isIntegracao && (
           <View style={{ paddingHorizontal: 16, marginBottom: 12 }}>
@@ -194,29 +198,31 @@ export function HomeScreen({ navigation }: Props) {
                 color: COLORS.ink,
               }}
             />
-
-            {/* Toggle: Ativo / Encerrado */}
-            <View style={{ flexDirection: 'row', gap: 8 }}>
-              {(['ativo', 'encerrado'] as StatusFiltro[]).map((opt) => (
-                <TouchableOpacity
-                  key={opt}
-                  onPress={() => mudarStatus(opt)}
-                  style={{
-                    flex: 1,
-                    paddingVertical: 8,
-                    borderRadius: 8,
-                    alignItems: 'center',
-                    backgroundColor: statusFiltro === opt ? COLORS.primary : COLORS.surfaceAlt,
-                  }}
-                >
-                  <Text style={{ color: statusFiltro === opt ? '#fff' : COLORS.inkSoft, fontWeight: '600' }}>
-                    {opt === 'ativo' ? 'Ativos' : 'Encerrados'}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
           </View>
         )}
+
+        {/* Toggle: Ativo / Encerrado — agora disponível para todos os tipos de usuário */}
+        <View style={{ paddingHorizontal: 16, marginBottom: 12 }}>
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            {(['ativo', 'encerrado'] as StatusFiltro[]).map((opt) => (
+              <TouchableOpacity
+                key={opt}
+                onPress={() => mudarStatus(opt)}
+                style={{
+                  flex: 1,
+                  paddingVertical: 8,
+                  borderRadius: 8,
+                  alignItems: 'center',
+                  backgroundColor: statusFiltro === opt ? COLORS.primary : COLORS.surfaceAlt,
+                }}
+              >
+                <Text style={{ color: statusFiltro === opt ? '#fff' : COLORS.inkSoft, fontWeight: '600' }}>
+                  {opt === 'ativo' ? 'Ativos' : 'Encerrados'}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
 
         {pendentes > 0 && (
           <View
@@ -243,7 +249,13 @@ export function HomeScreen({ navigation }: Props) {
           {carregandoEncerrados ? (
             <ActivityIndicator size="small" color={COLORS.primary} style={{ marginTop: 20 }} />
           ) : lotesOrdenados.length === 0 ? (
-            <EmptyState onNovo={() => navigation.navigate('NovoLote' as never)} />
+            statusFiltro === 'ativo' ? (
+              <EmptyState onNovo={() => navigation.navigate('NovoLote' as never)} />
+            ) : (
+              <Text style={{ color: COLORS.inkSoft, textAlign: 'center', marginTop: 40 }}>
+                Nenhum lote encerrado encontrado.
+              </Text>
+            )
           ) : (
             lotesOrdenados.map((lote) => {
               const idx = computeIndices(lote);
@@ -301,7 +313,7 @@ export function HomeScreen({ navigation }: Props) {
         </TouchableOpacity>
       )}
 
-      {/* Modal seleção do Integrado */}
+      {/* Modal seleção do Integrado — só Integração */}
       <Modal visible={modalEmpresaVisivel} animationType="slide" transparent>
         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' }}>
           <View style={{ backgroundColor: COLORS.bg, borderTopLeftRadius: 16, borderTopRightRadius: 16, maxHeight: '70%' }}>

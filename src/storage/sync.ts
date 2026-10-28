@@ -157,6 +157,31 @@ export async function enviarLotesPendentes(
 
         const ownerNome = (atual as any)?.perfis?.nome ?? null;
 
+        // Busca dados da empresa (parceiro) para cachear tipo/código/nome no lote,
+        // deixando disponível offline sem precisar consultar o servidor de novo.
+        let empresaNome: string | null = lote.empresaNome ?? null;
+        let empresaTipo: string | null = (lote as any).empresaTipo ?? null;
+        let codigoParceiro: string | null = (lote as any).codigoParceiro ?? null;
+
+        if (empresaIdDestino) {
+          const { data: empresa, error: empresaError } = await supabase
+            .from('empresas')
+            .select('nome, tipo, codigo_parceiro')
+            .eq('id', empresaIdDestino)
+            .maybeSingle();
+
+          if (empresaError) {
+            if (tratarErroSeForDeAuth(empresaError)) {
+              return { sucesso, falhas };
+            }
+            console.log('Erro ao buscar dados da empresa do lote:', empresaError.message);
+          } else if (empresa) {
+            empresaNome = empresa.nome ?? empresaNome;
+            empresaTipo = empresa.tipo ?? empresaTipo;
+            codigoParceiro = empresa.codigo_parceiro ?? codigoParceiro;
+          }
+        }
+
         await upsertLote(userId, {
           ...lote,
           ownerId: atual?.owner_id ?? lote.ownerId,
@@ -164,10 +189,13 @@ export async function enviarLotesPendentes(
           liberado: atual?.liberado ?? false,
           liberadoEm: atual?.liberado_em ?? null,
           liberadoPor: atual?.liberado_por ?? null,
+          empresaNome,
+          empresaTipo,
+          codigoParceiro,
           syncStatus: 'sincronizado',
           syncError: null,
           syncUpdatedAt: new Date().toISOString(),
-        });
+        } as any);
         sucesso++;
       } catch (e: any) {
         await upsertLote(userId, {
@@ -201,7 +229,7 @@ export async function baixarLotesDoServidor(empresaId: string): Promise<Resultad
 
     const { data: remotos, error } = await supabase
       .from('lotes')
-      .select('id, owner_id, liberado, liberado_em, liberado_por, data')
+      .select('id, owner_id, liberado, liberado_em, liberado_por, empresa_id, data')
       .in('empresa_id', empresaIds);
 
     if (error) {
@@ -229,6 +257,27 @@ export async function baixarLotesDoServidor(empresaId: string): Promise<Resultad
 
     const mapaNomes = new Map((perfis || []).map((p) => [p.id, p.nome]));
 
+    // Busca de uma vez os dados (nome/tipo/código) de todas as empresas envolvidas,
+    // para cachear no lote e permitir a verificação de tipo offline.
+    const empresaIdsLotes = Array.from(
+      new Set(remotos.map((r) => (r as any).empresa_id).filter(Boolean))
+    );
+    const { data: empresasInfo, error: empresasError } = await supabase
+      .from('empresas')
+      .select('id, nome, tipo, codigo_parceiro')
+      .in('id', empresaIdsLotes);
+
+    if (empresasError && tratarErroSeForDeAuth(empresasError)) {
+      return { sucesso, falhas };
+    }
+
+    const mapaEmpresas = new Map(
+      (empresasInfo || []).map((e) => [
+        e.id,
+        { nome: e.nome, tipo: e.tipo, codigoParceiro: e.codigo_parceiro },
+      ])
+    );
+
     const locais = await getLotes(userId);
     const mapaLocais = new Map(locais.map((l) => [l.id, l]));
     const exclusoesPendentes = await getExclusoesPendentes(userId);
@@ -241,6 +290,8 @@ export async function baixarLotesDoServidor(empresaId: string): Promise<Resultad
         const podeSobrescrever = !loteLocal || loteLocal.syncStatus === 'sincronizado';
 
         if (podeSobrescrever) {
+          const empresaInfo = mapaEmpresas.get((remoto as any).empresa_id);
+
           await upsertLote(userId, {
             ...loteRemoto,
             ownerId: remoto.owner_id,
@@ -248,10 +299,15 @@ export async function baixarLotesDoServidor(empresaId: string): Promise<Resultad
             liberado: remoto.liberado ?? false,
             liberadoEm: remoto.liberado_em ?? null,
             liberadoPor: remoto.liberado_por ?? null,
+            empresaId: (remoto as any).empresa_id ?? loteRemoto.empresaId ?? null,
+            empresaNome: empresaInfo?.nome ?? loteRemoto.empresaNome ?? null,
+            empresaTipo: empresaInfo?.tipo ?? (loteRemoto as any).empresaTipo ?? null,
+            codigoParceiro:
+              empresaInfo?.codigoParceiro ?? (loteRemoto as any).codigoParceiro ?? null,
             syncStatus: 'sincronizado',
             syncError: null,
             syncUpdatedAt: new Date().toISOString(),
-          });
+          } as any);
           sucesso++;
         }
       } catch {
