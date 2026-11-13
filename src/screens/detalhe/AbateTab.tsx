@@ -398,7 +398,7 @@ export function AbateTab({ route }: Props) {
 
       {/* Saída das aves */}
       <View style={styles.card}>
-        <Text style={styles.titulo}>Data e horário de saída das aves</Text>
+        <Text style={styles.titulo}>Data e horário de saída das aves (Pega)</Text>
         <Text style={styles.subtitulo}>Um horário para cada galpão do lote.</Text>
         {lote.galpoes.map((g: any) => (
           <View key={g.id} style={styles.galpaoBox}>

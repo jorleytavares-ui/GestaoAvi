@@ -135,6 +135,12 @@ export function DetalheLoteScreen({ route, navigation }: Props) {
       : lote.ownerNome || 'Usuário não identificado'
     : '—';
 
+  // Idade fracionada (dias com casas decimais), calculada via idx.idadeFracionadaAbate
+  const idadeFracionadaTexto =
+    idx && idx.idadeFracionadaAbate !== null && idx.idadeFracionadaAbate !== undefined
+      ? fmt(idx.idadeFracionadaAbate, 1)
+      : String(idade);
+
   return (
     <View style={styles.root}>
       <AppHeader onVoltar={() => navigation.goBack()} titulo={lote ? `Lote ${lote.numero}` : 'Lote'} />
@@ -283,7 +289,7 @@ export function DetalheLoteScreen({ route, navigation }: Props) {
             <Text style={styles.sectionBar}>Índices zootécnicos (todos os galpões)</Text>
             <View style={styles.grid}>
               <View style={styles.gridItem}>
-                <StatCard icon={Calendar} label="Idade" value={String(idade)} unit="dias" />
+                <StatCard icon={Calendar} label="Idade" value={idadeFracionadaTexto} unit="dias" />
               </View>
               <View style={styles.gridItem}>
                 <StatCard icon={Bird} label="Aves vivas" value={fmt(idx.avesVivas)} unit={`/ ${fmt(idx.quantidadeAlojadaTotal)}`} />

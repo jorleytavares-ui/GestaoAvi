@@ -167,6 +167,8 @@ export function NovoLoteForm({
     if (galpoes.some((g) => !g.quantidadeAlojada || Number(g.quantidadeAlojada) <= 0))
       return setErro('Informe a quantidade alojada em cada galpão.');
     if (galpoes.some((g) => !g.aspecto)) return setErro('Informe o aspecto de cada galpão.');
+    if (galpoes.some((g) => !g.horaDescarregamento))
+      return setErro('Informe a hora do descarregamento de cada galpão.');
 
     setErro('');
 
@@ -245,7 +247,7 @@ export function NovoLoteForm({
   };
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
+    <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
       <TextField label="Número do lote" placeholder="Ex: 24" value={numero} onChangeText={setNumero} />
 
       <Select label="Linhagem" value={linhagem} options={LINHAGENS} onChange={setLinhagem} />
@@ -401,7 +403,6 @@ export function NovoLoteForm({
                 value={g.horaDescarregamento}
                 onChange={(v) => atualizarGalpao(g.id, 'horaDescarregamento', v)}
                 mode="time"
-                optional
               />
 
               <Select

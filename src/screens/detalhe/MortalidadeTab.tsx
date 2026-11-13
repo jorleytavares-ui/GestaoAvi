@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import type { MaterialTopTabScreenProps } from '@react-navigation/material-top-tabs';
+import { Skull, Percent } from 'lucide-react-native';
 
 import { DateField } from '../../components/DateField';
 import { HistoricoLista } from '../../components/registros/HistoricoLista';
@@ -104,6 +105,13 @@ export function MortalidadeTab({ route }: Props) {
       setMotivoDescarte('');
       setObs('');
       await carregarLote();
+
+      const msgOk = 'Registro de mortalidade salvo com sucesso.';
+      if (Platform.OS === 'web') {
+        window.alert(msgOk);
+      } else {
+        Alert.alert('Gravação confirmada', msgOk);
+      }
     } catch (e: any) {
       if (Platform.OS === 'web') {
         window.alert(e.message);
@@ -115,8 +123,9 @@ export function MortalidadeTab({ route }: Props) {
     }
   };
 
-  const handleExcluir = async (item: { data: string; galpaoId: string }) => {
-    if (!userId) return;
+  // Aceita o item completo (como o HistoricoLista repassa) e usa apenas o `id` internamente.
+  const handleExcluir = async (item: any) => {
+    if (!userId || !item?.id) return;
     const confirmar =
       Platform.OS === 'web'
         ? window.confirm('Deseja realmente excluir este registro de mortalidade?')
@@ -134,7 +143,7 @@ export function MortalidadeTab({ route }: Props) {
     if (!confirmar) return;
 
     try {
-      await removeMortalidade(userId, lote.id, item.galpaoId, item.data);
+      await removeMortalidade(userId, lote.id, item.id);
       await carregarLote();
     } catch (e: any) {
       if (Platform.OS === 'web') {
@@ -146,119 +155,148 @@ export function MortalidadeTab({ route }: Props) {
   };
 
   const itens = (lote.mortalidades || [])
-  .filter((r: any) => r.galpaoId === galpaoId)
-  .map((r: any) => ({
-    data: r.data,
-    galpaoId: r.galpaoId,
-    dia: daysBetween(lote.dataAlojamento, r.data),
-    mortalidade: Number(r.mortalidade) || 0,
-    descartados: Number(r.descartados) || 0,
-    motivoDescarte: r.motivoDescarte,
-    obs: r.obs,
-  }))
-  .sort((a: any, b: any) => b.data.localeCompare(a.data));
+    .filter((r: any) => r.galpaoId === galpaoId)
+    .map((r: any) => ({
+      id: r.id,
+      data: r.data,
+      galpaoId: r.galpaoId,
+      dia: daysBetween(lote.dataAlojamento, r.data),
+      mortalidade: Number(r.mortalidade) || 0,
+      descartados: Number(r.descartados) || 0,
+      motivoDescarte: r.motivoDescarte,
+      obs: r.obs,
+    }))
+    .sort((a: any, b: any) => b.data.localeCompare(a.data));
 
-const opcoesGalpao = lote.galpoes.map((g: any) => ({ label: g.nome, value: g.id }));
+  const opcoesGalpao = lote.galpoes.map((g: any) => ({ label: g.nome, value: g.id }));
 
+  const galpaoAtual = lote.galpoes.find((g: any) => g.id === galpaoId);
+  const quantidadeAlojada = Number(galpaoAtual?.quantidadeAlojada) || 0;
+  const mortalidadeAcumulada = itens.reduce(
+    (s: number, r: any) => s + (Number(r.mortalidade) || 0) + (Number(r.descartados) || 0),
+    0
+  );
+  const percentualMortalidade =
+    quantidadeAlojada > 0 ? (mortalidadeAcumulada / quantidadeAlojada) * 100 : 0;
 
-return (
-  <View>
-    <View style={styles.card}>
-      <Text style={styles.titulo}>Mortalidade e descarte</Text>
+  return (
+    <View>
+      <View style={styles.card}>
+        <Text style={styles.titulo}>Mortalidade e descarte</Text>
 
-      {lote.galpoes.length > 1 && (
+        {lote.galpoes.length > 1 && (
+          <View style={styles.campo}>
+            <SimpleSelect
+              label="Galpão"
+              value={galpaoId}
+              onChange={setGalpaoId}
+              opcoes={opcoesGalpao}
+            />
+          </View>
+        )}
+
+        <View style={styles.gridIndicadores}>
+          <View style={[styles.indicadorCard, styles.gridItem]}>
+            <View style={styles.indicadorHeader}>
+              <Skull size={16} color={COLORS.inkSoft} />
+              <Text style={styles.indicadorLabel}>Mortalidade acumulada</Text>
+            </View>
+            <Text style={styles.indicadorValor}>
+              {mortalidadeAcumulada}
+              <Text style={styles.indicadorUnidade}> aves</Text>
+            </Text>
+          </View>
+          <View style={[styles.indicadorCard, styles.gridItem]}>
+            <View style={styles.indicadorHeader}>
+              <Percent size={16} color={COLORS.inkSoft} />
+              <Text style={styles.indicadorLabel}>Percentual de mortalidade</Text>
+            </View>
+            <Text style={styles.indicadorValor}>
+              {percentualMortalidade.toFixed(2)}
+              <Text style={styles.indicadorUnidade}> %</Text>
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.campo}>
+          <DateField
+            label="Data"
+            value={data}
+            onChange={setData}
+            mode="date"
+            minimumDate={dataAlojamento}
+            maximumDate={new Date()}
+          />
+        </View>
+
+        <View style={styles.linha}>
+          <View style={[styles.campo, styles.metade]}>
+            <Text style={styles.label}>Mortalidade do dia (aves)</Text>
+            <TextInput
+              style={styles.input}
+              keyboardType="numeric"
+              value={mortalidade}
+              onChangeText={setMortalidade}
+              placeholder="0"
+            />
+          </View>
+
+          <View style={[styles.campo, styles.metade]}>
+            <Text style={styles.label}>Descartados do dia (aves)</Text>
+            <TextInput
+              style={styles.input}
+              keyboardType="numeric"
+              value={descartados}
+              onChangeText={setDescartados}
+              placeholder="0"
+            />
+          </View>
+        </View>
+
         <View style={styles.campo}>
           <SimpleSelect
-            label="Galpão"
-            value={galpaoId}
-            onChange={setGalpaoId}
-            opcoes={opcoesGalpao}
+            label="Motivo do descarte — opcional"
+            value={motivoDescarte}
+            onChange={setMotivoDescarte}
+            opcoes={MOTIVOS_DESCARTE}
           />
         </View>
-      )}
 
-      <View style={styles.campo}>
-        <DateField
-          label="Data"
-          value={data}
-          onChange={setData}
-          mode="date"
-          minimumDate={dataAlojamento}
-          maximumDate={new Date()}
-        />
-      </View>
-
-      <View style={styles.linha}>
-        <View style={[styles.campo, styles.metade]}>
-          <Text style={styles.label}>Mortalidade do dia (aves)</Text>
+        <View style={styles.campo}>
+          <Text style={styles.label}>Observações — opcional</Text>
           <TextInput
-            style={styles.input}
-            keyboardType="numeric"
-            value={mortalidade}
-            onChangeText={setMortalidade}
-            placeholder="0"
+            style={[styles.input, styles.textarea]}
+            value={obs}
+            onChangeText={setObs}
+            placeholder="Ex: aumento de temperatura à tarde..."
+            multiline
+            numberOfLines={4}
           />
         </View>
 
-        <View style={[styles.campo, styles.metade]}>
-          <Text style={styles.label}>Descartados do dia (aves)</Text>
-          <TextInput
-            style={styles.input}
-            keyboardType="numeric"
-            value={descartados}
-            onChangeText={setDescartados}
-            placeholder="0"
-          />
-        </View>
-      </View>
+        {/* Botão no meio do card, separando formulário do histórico */}
+        <Pressable
+          style={[styles.button, salvando && styles.buttonDisabled]}
+          onPress={handleSalvar}
+          disabled={salvando}
+        >
+          {salvando ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={styles.buttonText}>✓ Salvar lançamento</Text>
+          )}
+        </Pressable>
 
-      <View style={styles.campo}>
-        <SimpleSelect
-          label="Motivo do descarte — opcional"
-          value={motivoDescarte}
-          onChange={setMotivoDescarte}
-          opcoes={MOTIVOS_DESCARTE}
+        {/* Histórico dentro do mesmo card */}
+        <Text style={styles.subtitulo}>Histórico</Text>
+        <HistoricoLista
+          itens={itens}
+          galpoes={lote.galpoes}
+          onExcluir={handleExcluir}
         />
       </View>
-
-      <View style={styles.campo}>
-        <Text style={styles.label}>Observações — opcional</Text>
-        <TextInput
-          style={[styles.input, styles.textarea]}
-          value={obs}
-          onChangeText={setObs}
-          placeholder="Ex: aumento de temperatura à tarde..."
-          multiline
-          numberOfLines={4}
-        />
-      </View>
-
-      {/* Botão no meio do card, separando formulário do histórico */}
-      <Pressable
-        style={[styles.button, salvando && styles.buttonDisabled]}
-        onPress={handleSalvar}
-        disabled={salvando}
-      >
-        {salvando ? (
-          <ActivityIndicator color="#fff" />
-        ) : (
-          <Text style={styles.buttonText}>✓ Salvar lançamento</Text>
-        )}
-      </Pressable>
-
-      {/* Histórico dentro do mesmo card */}
-      <Text style={styles.subtitulo}>Histórico</Text>
-      <HistoricoLista
-        itens={itens}
-        galpoes={lote.galpoes}
-        onExcluir={handleExcluir}
-      />
     </View>
-  </View>
-);
-
-
-
+  );
 }
 
 const styles = StyleSheet.create({
@@ -274,12 +312,12 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   subtitulo: {
-  fontSize: 16,
-  fontWeight: '700',
-  color: COLORS.ink,
-  marginTop: 20,
-  marginBottom: 12,
-},
+    fontSize: 16,
+    fontWeight: '700',
+    color: COLORS.ink,
+    marginTop: 20,
+    marginBottom: 12,
+  },
 
   campo: {
     marginBottom: 16,
@@ -328,13 +366,53 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   card: {
-  backgroundColor: COLORS.surface,
-  borderWidth: 1,
-  borderColor: COLORS.line,
-  borderRadius: 14,
-  padding: 14,
-  marginBottom: 16,
-  gap: 12,
-},
-
+    backgroundColor: COLORS.surface,
+    borderWidth: 1,
+    borderColor: COLORS.line,
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 16,
+    gap: 12,
+  },
+  gridIndicadores: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    gap: 10,
+    marginBottom: 16,
+  },
+  gridItem: {
+    width: '48%',
+  },
+  indicadorCard: {
+    backgroundColor: COLORS.surfaceAlt,
+    borderWidth: 1,
+    borderColor: COLORS.line,
+    borderRadius: 10,
+    padding: 12,
+    alignItems: 'flex-start',
+  },
+  indicadorHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 6,
+  },
+  indicadorLabel: {
+    fontSize: 11.5,
+    fontWeight: '600',
+    color: COLORS.inkSoft,
+    textAlign: 'left',
+  },
+  indicadorValor: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: COLORS.ink,
+    textAlign: 'left',
+  },
+  indicadorUnidade: {
+    fontSize: 11,
+    fontWeight: '400',
+    color: COLORS.inkSoft,
+  },
 });

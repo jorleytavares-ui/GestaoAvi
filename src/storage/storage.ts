@@ -20,16 +20,41 @@ function getKeyFaixaConforto(userId: string) {
 }
 
 function normalizarTemperaturas(lote: Lote): Lote {
-  if (!lote.temperaturas?.length) return lote;
   let mudou = false;
-  const temperaturas = lote.temperaturas.map((t: any) => {
-    if (!t.id) {
+  let temperaturas = lote.temperaturas;
+  if (lote.temperaturas?.length) {
+    temperaturas = lote.temperaturas.map((t: any) => {
+      if (!t.id) {
+        mudou = true;
+        return { ...t, id: uid() };
+      }
+      return t;
+    });
+  }
+  let mortalidades = (lote as any).mortalidades;
+  if (mortalidades?.length) {
+    mortalidades = mortalidades.map((m: any) => {
+      if (!m.id) {
+        mudou = true;
+        return { ...m, id: uid() };
+      }
+      return m;
+    });
+  }
+  return mudou ? { ...lote, temperaturas, mortalidades } as Lote : lote;
+}
+
+function normalizarMortalidades(lote: Lote): Lote {
+  if (!lote.mortalidades?.length) return lote;
+  let mudou = false;
+  const mortalidades = lote.mortalidades.map((m: any) => {
+    if (!m.id) {
       mudou = true;
-      return { ...t, id: uid() };
+      return { ...m, id: uid() };
     }
-    return t;
+    return m;
   });
-  return mudou ? { ...lote, temperaturas } : lote;
+  return mudou ? { ...lote, mortalidades } : lote;
 }
 
 // ---------- Lotes ----------
@@ -37,7 +62,7 @@ function normalizarTemperaturas(lote: Lote): Lote {
 export async function getLotes(userId: string): Promise<Lote[]> {
   const raw = await AsyncStorage.getItem(getKeyLotes(userId));
   const lotes: Lote[] = raw ? JSON.parse(raw) : [];
-  const lotesNormalizados = lotes.map(normalizarTemperaturas);
+  const lotesNormalizados = lotes.map((l) => normalizarMortalidades(normalizarTemperaturas(l)));
   const houveMudanca = lotesNormalizados.some((l, i) => l !== lotes[i]);
   if (houveMudanca) {
     await AsyncStorage.setItem(getKeyLotes(userId), JSON.stringify(lotesNormalizados));
@@ -234,27 +259,18 @@ export async function addMortalidade(
   }
 ): Promise<Lote | undefined> {
   return updateLote(userId, loteId, (lote) => {
-    const mortalidades = [...(lote.mortalidades || [])];
-    const idxExistente = mortalidades.findIndex(
-      (r) => r.galpaoId === registro.galpaoId && r.data === registro.data
-    );
-    if (idxExistente >= 0) mortalidades[idxExistente] = { ...registro };
-    else mortalidades.push({ ...registro });
+    const mortalidades = [...(lote.mortalidades || []), { id: uid(), ...registro }];
     return { ...lote, mortalidades };
   });
 }
 
-
 export async function removeMortalidade(
   userId: string,
   loteId: string,
-  galpaoId: string,
-  data: string
+  id: string
 ): Promise<Lote | undefined> {
   return updateLote(userId, loteId, (lote) => {
-    const mortalidades = (lote.mortalidades || []).filter(
-      (r) => !(r.galpaoId === galpaoId && r.data === data)
-    );
+    const mortalidades = (lote.mortalidades || []).filter((r: any) => r.id !== id);
     return { ...lote, mortalidades };
   });
 }

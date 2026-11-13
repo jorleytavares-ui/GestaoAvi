@@ -118,7 +118,9 @@ serve(async (req) => {
     }
 
     // 4. Já existe assinatura PENDENTE (aguardando pagamento) para esta empresa?
-    //    -> Reimprime o boleto/Pix existente, sem criar cobrança duplicada.
+    //    -> Se for do MESMO plano, reimprime o boleto/Pix existente, sem duplicar.
+    //    -> Se for de um plano DIFERENTE, cancela a antiga e segue para criar uma nova,
+    //       já com o valor do plano recém-escolhido.
     const { data: assinaturaPendente } = await supabase
       .from('assinaturas')
       .select('id, asaas_subscription_id, plano_id')
@@ -128,7 +130,7 @@ serve(async (req) => {
       .limit(1)
       .maybeSingle();
 
-    if (assinaturaPendente?.asaas_subscription_id) {
+    if (assinaturaPendente?.asaas_subscription_id && assinaturaPendente.plano_id === planoId) {
       const subCheckResp = await fetch(
         `${ASAAS_API_URL}/subscriptions/${assinaturaPendente.asaas_subscription_id}`,
         { headers: { access_token: ASAAS_API_KEY } }
@@ -146,7 +148,7 @@ serve(async (req) => {
           const pagamentoPendente = pagamentosExistentes?.data?.[0];
 
           if (pagamentoPendente) {
-            // ✅ Reimpressão: retorna o mesmo boleto/Pix já gerado
+            // ✅ Reimpressão: retorna o mesmo boleto/Pix já gerado (mesmo plano)
             return new Response(
               JSON.stringify({
                 reimpressao: true,
@@ -158,6 +160,20 @@ serve(async (req) => {
           }
         }
       }
+    }
+
+    // 4.1 Se existe pendente de OUTRO plano, cancela a assinatura antiga na Asaas
+    //     e marca como substituída no banco, antes de criar a nova.
+    if (assinaturaPendente?.asaas_subscription_id && assinaturaPendente.plano_id !== planoId) {
+      await fetch(`${ASAAS_API_URL}/subscriptions/${assinaturaPendente.asaas_subscription_id}`, {
+        method: 'DELETE',
+        headers: { access_token: ASAAS_API_KEY },
+      });
+
+      await supabase
+        .from('assinaturas')
+        .update({ status: 'substituida', atualizado_em: new Date().toISOString() })
+        .eq('id', assinaturaPendente.id);
     }
 
     // 5. Cliente na Asaas (customer_id fica salvo na licença, é reaproveitado entre planos)

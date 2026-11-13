@@ -37,6 +37,47 @@ export const fmt = (
         maximumFractionDigits: digits,
       });
 
+// ---------- Idade fracionada (abate) ----------
+// [(média das datas de abate) + (média das horas de abate)] − [data de alojamento + média das horas de descarregamento dos galpões]
+// Sem registros em saidaAves, usa a data/hora atuais como referência de abate.
+
+function horaParaFracaoDia(hora: string | null | undefined): number {
+  if (!hora) return 0;
+  const [h, m] = hora.split(':').map(Number);
+  return ((h || 0) + (m || 0) / 60) / 24;
+}
+
+function dataParaTimestamp(data: string): number {
+  const [y, m, d] = data.split('-').map(Number);
+  return new Date(y, (m || 1) - 1, d || 1).getTime();
+}
+
+export function idadeFracionadaAbate(lote: Lote): number {
+  const saidas = ((lote as any).saidaAves || []).filter((s: any) => s?.data);
+
+  let abateTimestamp: number;
+  if (saidas.length) {
+    const mediaDataAbateMs =
+      saidas.reduce((s: number, r: any) => s + dataParaTimestamp(r.data), 0) / saidas.length;
+    const mediaHoraAbateFrac =
+      saidas.reduce((s: number, r: any) => s + horaParaFracaoDia(r.hora), 0) / saidas.length;
+    abateTimestamp = mediaDataAbateMs + mediaHoraAbateFrac * 86400000;
+  } else {
+    abateTimestamp = Date.now();
+  }
+
+  const galpoesComHora = (lote.galpoes || []).filter((g: any) => g.horaDescarregamento);
+  const mediaHoraDescFrac = galpoesComHora.length
+    ? galpoesComHora.reduce((s: number, g: any) => s + horaParaFracaoDia(g.horaDescarregamento), 0) /
+      galpoesComHora.length
+    : 0;
+
+  const alojamentoTimestamp =
+    dataParaTimestamp(lote.dataAlojamento) + mediaHoraDescFrac * 86400000;
+
+  return Math.max((abateTimestamp - alojamentoTimestamp) / 86400000, 0);
+}
+
 // ---------- Interpolação (peso padrão, faixa de conforto) ----------
 
 export interface PontoPeso {
@@ -740,6 +781,7 @@ export function computeIndices(lote: Lote) {
     percentualCondenacao,
     pesoProjetadoG,
     diffPesoProjetado,
+    idadeFracionadaAbate: idadeFracionadaAbate(lote),
   };
 }
 
